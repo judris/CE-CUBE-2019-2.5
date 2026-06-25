@@ -1,5 +1,12 @@
 #include <Arduino.h>
+#if defined(__AVR__)
+#include <stddef.h>
+
+inline void* operator new(size_t, void* ptr) noexcept { return ptr; }
+inline void operator delete(void*, void*) noexcept {}
+#else
 #include <new>
+#endif
 
 #include "firmware/firmware_app.hpp"
 

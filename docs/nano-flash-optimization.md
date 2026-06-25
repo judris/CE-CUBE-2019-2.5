@@ -1,7 +1,7 @@
 # Nano Flash Optimization Notes
 
 Documented by: Codex (OpenAI GPT-5 coding agent)
-Timestamp: 2026-06-25 10:06:32 +03:00
+Timestamp: 2026-06-25 16:02:54 +03:00
 
 ## Scope
 
@@ -15,6 +15,11 @@ This note now also covers the timing-field follow-up completed later on
 2026-06-25, where compact run timestamps were added and the compatibility-only
 verbose `v:1` parser was disabled on Nano hardware builds to keep them fitting.
 
+It also covers the later Nano USB follow-up on 2026-06-25 where the direct-USB
+profile had to be trimmed further because the older AVR toolchain used by the
+PlatformIO IDE build button still exceeded flash even though a newer local
+toolchain fit.
+
 ## Summary Of Changes
 
 - Added a small compile-time feature flag header:
@@ -27,12 +32,18 @@ verbose `v:1` parser was disabled on Nano hardware builds to keep them fitting.
   - two alternate Nano build profiles
 - Moved `FirmwareApp` construction from static startup into `setup()` so the
   Nano avoids unnecessary global-constructor flash overhead
+- Replaced the `<new>` dependency in `src/main.cpp` with a local AVR-safe
+  placement-new declaration because the active AVR toolchain may not ship the
+  standard `<new>` header
 - Gated optional firmware paths so unused code does not stay linked in:
   - RF24 transport
   - pressure polling integration
   - `protocol.info` event payload support
 - Disabled the legacy verbose `v:1` command parser on Nano hardware builds:
   - `CE_CUBE_ENABLE_LEGACY_V1_COMMANDS=0`
+- Disabled current-sense polling in `nanoatmega328_usb`:
+  - `CE_CUBE_ENABLE_CURRENT=0`
+  - this was the smallest functional cut that made the old AVR toolchain fit
 - Added a true RF24-disabled stub path so USB-only builds do not require
   `RF24.h` or the RF24 library at compile time.
 
@@ -66,6 +77,7 @@ Lean USB-only Nano build.
 
 - RF24 disabled
 - pressure sensor enabled
+- current-sense polling disabled
 - `protocol.info` disabled
 
 Use this when the instrument is connected directly over USB and the RF24 link
@@ -79,6 +91,8 @@ The build is controlled with these macros:
 - `CE_CUBE_ENABLE_PRESSURE`
 - `CE_CUBE_ENABLE_PROTOCOL_INFO`
 - `CE_CUBE_ENABLE_LEGACY_V1_COMMANDS`
+- `CE_CUBE_ENABLE_CURRENT`
+- `CE_CUBE_ENABLE_REPLENISH`
 
 Default values live in
 `lib/ce_cube_core/include/ce_cube/feature_flags.hpp`, and each PlatformIO
@@ -104,14 +118,28 @@ The default `nanoatmega328_usb` build now rejects the `protocol.info` command wi
 That change is intentional to save flash in the default Nano configuration.
 If `protocol.info` is needed, use `nanoatmega328_full`.
 
+The same `nanoatmega328_usb` profile also compiles out current-sense polling by
+setting `CE_CUBE_ENABLE_CURRENT=0`.
+
+The shared telemetry schema is unchanged, but the USB Nano profile no longer
+refreshes live current measurements.
+
+That change was chosen because:
+
+- the IDE-button toolchain path failed at `30898 / 30720`
+- protocol behavior could be preserved without parser regressions
+- disabling current-sense recovered enough flash without touching motion,
+  pressure, EEPROM protocol upload, or USB command handling
+
 ## Measured Results
 
 ### Before This Optimization Pass
 
 - flash was near or above the Nano limit
 - one reported failing build was:
-  - flash: `30764 / 30720`
-  - RAM: `1851 / 2048`
+  - flash: `30898 / 30720`
+  - RAM: `1482 / 2048`
+  - toolchain: PlatformIO IDE button path using `Atmel AVR 1.12.2`
 
 ### After This Optimization Pass
 
@@ -129,9 +157,11 @@ If `protocol.info` is needed, use `nanoatmega328_full`.
 
 #### `nanoatmega328_usb`
 
-- flash: `30680 / 30720`
-- RAM: `1488 / 2048`
+- flash: `30538 / 30720`
+- RAM: `1472 / 2048`
 - status: builds successfully
+- note: this is the validated result on the older AVR toolchain path used by
+  the IDE build button
 
 ## Validation Performed
 
@@ -161,6 +191,8 @@ The best next flash-focused follow-up is:
 
 - recover enough space for an RF24-enabled Nano build if wireless transport is
   still required on ATmega328P hardware
+- decide whether current-sense should stay disabled in `nanoatmega328_usb`, or
+  whether a future pass should recover enough flash to restore it
 - reduce or gate `protocol.info` further so `nanoatmega328_full` fits again
 - decide whether a future non-Nano target should re-enable verbose `v:1`
   compatibility, or whether the project can retire it entirely

@@ -22,6 +22,7 @@ especially Arduino Nano ATmega328P.
   - dependency policy
   - testing strategy
   - current limitations
+  - AVR-specific startup-construction note for `src/main.cpp`
 - `protocol-reference.md`
   - normative compact `v:2` wire protocol
   - compact timing fields for `gt` and `at`
@@ -45,6 +46,8 @@ especially Arduino Nano ATmega328P.
   - feature flags
   - build profile differences
   - measured memory usage
+  - note about the USB Nano profile disabling current-sense polling to fit the
+    older AVR toolchain path
 
 ## Recommended Reading Order
 

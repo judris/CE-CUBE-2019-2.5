@@ -1,7 +1,7 @@
 # CE-CUBE Project Overview
 
 Documented by: Codex (OpenAI GPT-5 coding agent)
-Timestamp: 2026-06-25 09:31:04 +03:00
+Timestamp: 2026-06-25 16:02:54 +03:00
 
 ## What This Repository Is
 
@@ -39,6 +39,8 @@ The current PlatformIO environments are:
   - default target
   - RF24 disabled
   - pressure enabled
+  - current-sense polling disabled to stay within Nano flash on the older
+    PlatformIO AVR toolchain used by the IDE build button
   - intended for direct USB operation with lower flash/RAM use
   - current recommended Nano build
 - `native`
@@ -74,6 +76,8 @@ Not used by design:
 - `src/main.cpp`
   - firmware entry point
   - performs explicit startup construction for the long-lived `FirmwareApp`
+  - uses a local AVR-safe placement-new declaration because some AVR toolchains
+    used with PlatformIO do not provide the standard `<new>` header
 - `src/firmware`
   - board-facing adapters and transport implementations
 - `lib/ce_cube_core/include/ce_cube`
@@ -340,6 +344,8 @@ Important repo rules:
 ## Current Limitations And Notes
 
 - the default Nano build disables `protocol.info` to save flash
+- the default Nano USB build also disables current-sense polling so the
+  legacy AVR toolchain path still fits in 30 KB flash
 - the RF24-enabled `nanoatmega328` profile currently exceeds Nano flash under
   the present PlatformIO and dependency set
 - third-party library warnings still exist in Arduino core and external
