@@ -84,8 +84,12 @@ void JsonProcessor::split_start_array()
     strncpy(tmp, &_startString[_bufLen - 1], _bufLen - 2);
     //  Serial.println(tmp);
     snprintf(_textB, sizeof(_textB), "%-32s", tmp);
+
+    // snprintf(_textA, sizeof(_textA), "%-32s", "{\"c\":\"1.234567890\",\"t");
+
+    // snprintf(_textB, sizeof(_textB), "%-32s", "\":\"0\",\"i\":\"0\"}");
     //  Serial.println(textB);
-    Serial.println("start signal split");
+    // Serial.println("start signal split");
 }
 
 char *JsonProcessor::get_textA()

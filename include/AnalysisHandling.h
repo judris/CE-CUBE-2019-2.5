@@ -5,12 +5,12 @@ class AnalysisHandling : public CEsystem
 {
   private:
     /* data */
-    int vialsNumber = 12, vialPosition = 0, analysisNumber = 6;
-    int currentAnalysis = 1, repetitions = 3, currentRepetition = 0;
-    int turnPositions = 0, cycleTask = 0, cycleTaskNumber = 25;
-    float analysisTimemin = 30.2; //min 5.5
-    unsigned long analysisTimeMillis, currentAnalysisTime, conditioningTime = 180000, flushTime = 45000;
-    long vacuumFlushTime = 45000, currentConditioningTime, currentFlushTime, currentVacuumFlushTime, currentInjectionTime, currentCollectionTime; //seconds
+    int vialsNumber = 12, vialPosition = 0, analysisNumber = 0, number_of_analysis = 4;
+    int currentAnalysis = 1, repetitions = 0, repetitions_per_analysis = 3, currentRepetition = 0;
+    int turnPositions = 0, cycleTask = 0, cycleTaskNumber = 35;
+    float analysisTimemin = 21.2;                                                                                                                  //min 5.5
+    unsigned long analysisTimeMillis, currentAnalysisTime, conditioningTime = 0, flushTime = 0;                                                    //flushtime 90000
+    long vacuumFlushTime = 150000, currentConditioningTime, currentFlushTime, currentVacuumFlushTime, currentInjectionTime, currentCollectionTime; //seconds
     const int vialBGE1 = 0, vialBGE2 = 1;
     float vialResolution = 4076.0 / 12.0;
 
@@ -25,14 +25,17 @@ class AnalysisHandling : public CEsystem
     bool _switch_off_flag = false;
     bool _send_start_signal_flag = false;
 
+    bool _replenish_flag = false, _sampling_flag = true;
+    void task1(), task2(), task3(), task4();
+
   public:
     AnalysisHandling(/* args */);
     ~AnalysisHandling();
     bool analysis_timer();
     void analysis_init();
-    bool get_BGE1();
-    bool get_BGE2();
-    bool get_Sample();
+    bool get_BGE(int vialNo);
+    // bool get_BGE2();
+    bool get_Sample(int offset_positions);
 
     void set_mod_timer(bool flag, unsigned long period_millis, unsigned long current_millis);
     void set_analysis_start(bool start_flag, bool init_flag);
@@ -48,6 +51,11 @@ class AnalysisHandling : public CEsystem
     bool get_start_signal_status();
     void set_start_signal_status(bool status);
     void set_analysis_time(float analysis_min);
+    int get_analysis_number();
+    int get_repetition_number();
+    bool get_analysis_started_flag();
+    void return_carousel_to_zero();
+    void set_replenish_flag(bool flag), set_sampling_flag(bool flag);
 };
 
 AnalysisHandling::AnalysisHandling(/* args */)
@@ -56,6 +64,37 @@ AnalysisHandling::AnalysisHandling(/* args */)
 
 AnalysisHandling::~AnalysisHandling()
 {
+}
+
+void AnalysisHandling::return_carousel_to_zero()
+{
+    while (!LiftDown())
+    {
+        LiftDown();
+    }
+    while (!get_BGE(vialBGE1))
+    {
+        get_BGE(vialBGE1);
+    }
+    while (!LiftUp())
+    {
+        LiftUp();
+    }
+}
+
+bool AnalysisHandling::get_analysis_started_flag()
+{
+    return analysisStartedFlag;
+}
+
+int AnalysisHandling::get_analysis_number()
+{
+    return currentAnalysis;
+}
+
+int AnalysisHandling::get_repetition_number()
+{
+    return currentRepetition;
 }
 
 void AnalysisHandling::set_analysis_start(bool start_flag, bool init_flag)
@@ -81,16 +120,24 @@ void AnalysisHandling::analysis_init()
     cycleTask = 0;
     vialsNumber = 12;
     vialPosition = 0;
-    analysisNumber = 7;
-    repetitions = 3;
+    // analysisNumber = number_of_analysis;
+    if (_sampling_flag)
+    {
+        analysisNumber = 4;
+    }
+    else
+    {
+        analysisNumber = 7;
+    }
+    repetitions = repetitions_per_analysis;
     analysisTimeMillis = analysisTimemin * 60 * 1000;
     currentRepetition = 1;
     currentAnalysis = 1;
 }
 
-bool AnalysisHandling::get_BGE1()
+bool AnalysisHandling::get_BGE(int vialNo)
 {
-    turnPositions = vialPosition - vialBGE1;
+    turnPositions = vialPosition - vialNo;
     Serial.print("turnPositions:");
     Serial.println(turnPositions);
     if (turnPositions > 0)
@@ -125,50 +172,15 @@ bool AnalysisHandling::get_BGE1()
         turnOffMotor();
         return true;
     }
-}
-
-bool AnalysisHandling::get_BGE2()
-{
-    turnPositions = vialPosition - vialBGE2;
-    Serial.print("turnPositions:");
-    Serial.println(turnPositions);
-    if (turnPositions > 0)
+    else //2019 02 12
     {
-        set_carousel(false, int(vialResolution * float(turnPositions)));
-        while (!turnCarousel())
-        {
-            turnCarousel();
-        }
-        turnOffMotor();
-        vialPosition = vialPosition - turnPositions;
-        return true;
-    }
-    else if (turnPositions < 0)
-    {
-        set_carousel(true, -1 * int(vialResolution * float(turnPositions)));
-        while (!turnCarousel())
-        {
-            turnCarousel();
-        }
-        turnOffMotor();
-        vialPosition = vialPosition - turnPositions;
-        return true;
-    }
-    else if (turnPositions == 0)
-    {
-        set_carousel(true, vialResolution * float(turnPositions));
-        while (!turnCarousel())
-        {
-            turnCarousel();
-        }
-        turnOffMotor();
-        return true;
+        return false;
     }
 }
 
-bool AnalysisHandling::get_Sample()
+bool AnalysisHandling::get_Sample(int offset_positions)
 {
-    turnPositions = vialPosition - currentAnalysis + 1 - 2;
+    turnPositions = vialPosition - currentAnalysis + 1 - 2 + offset_positions;
     Serial.print("currentAnalysis:");
     Serial.println(currentAnalysis);
     Serial.print("turnPositions:");
@@ -205,6 +217,10 @@ bool AnalysisHandling::get_Sample()
         turnOffMotor();
         return true;
     }
+    else //2019 02 12
+    {
+        return false;
+    }
 }
 
 void AnalysisHandling::set_mod_timer(bool flag, unsigned long period_millis, unsigned long current_millis)
@@ -223,6 +239,10 @@ bool AnalysisHandling::analysis_timer()
         // cycleTask++;
         Serial.println("timer Finished");
         return true;
+    }
+    else //2019 02 12
+    {
+        return false;
     }
 }
 
@@ -323,59 +343,107 @@ void AnalysisHandling::handleAnalysisCycle()
         switch (cycleTask)
         {
         case 0:
+            if (_sampling_flag)
+            {
+                if (currentRepetition == 1)
+                {
+                    while (!LiftDown())
+                    {
+                        LiftDown();
+                    }
+                    while (!get_Sample(4))
+                    {
+                        get_Sample(4);
+                    }
+                    while (!LiftUp())
+                    {
+                        LiftUp();
+                    }
+                    while (!startSampling())
+                    {
+                        startSampling();
+                    }
+                }
+            }
+            cycleTask++;
+            break;
+        case 1:
+        //gets -3 vial position ()0.1M NaOH, or Water and 
+            // while (!LiftDown())
+            // {
+            //     LiftDown();
+            // }
+            // while (!get_BGE(-3))
+            // {
+            //     get_BGE(-3);
+            // }
+            // while (!LiftUp())
+            // {
+            //     LiftUp();
+            // }
+            // set_mod_timer(true, 90000, millis());
+            // _vacuum_flush_flag = true;
             while (!LiftDown())
             {
                 LiftDown();
             }
             cycleTask++;
-            break;
-        case 1:
-            while (!get_BGE1())
-            {
-                get_BGE1();
-            }
-            cycleTask++;
+            //        Serial.println(cycleTask);
             break;
         case 2:
+        //performs vaccum flushing
+            // if (vacuumFlushTime > 0)
+            // {
+            //     capillary_vacuum_flush();
+            // }
+            // if (_switch_off_flag)
+            // {
+            //     _switch_off_flag = false;
+            //     setPumpOFF();
+            //     cycleTask++;
+            // }
+            while (!get_BGE(-2))
+            {
+                get_BGE(-2);
+            }
             while (!LiftUp())
             {
                 LiftUp();
             }
-            set_mod_timer(true, vacuumFlushTime, millis());
+            set_mod_timer(true, 60000, millis());
             _vacuum_flush_flag = true;
             cycleTask++;
-            //        Serial.println(cycleTask);
             break;
         case 3:
-            capillary_vacuum_flush();
+            if (vacuumFlushTime > 0)
+            {
+                capillary_vacuum_flush();
+            }
             if (_switch_off_flag)
             {
                 _switch_off_flag = false;
                 setPumpOFF();
-                set_mod_timer(true, flushTime, millis());
-                _pressure_flush_flag = true;
                 cycleTask++;
             }
-            //        Serial.println(cycleTask);
             break;
         case 4:
-            capillary_pressure_flush();
-            if (_switch_off_flag)
+            while (!LiftDown())
             {
-                _switch_off_flag = false;
-                setValvesOFF();
-                setPumpOFF();
-                set_mod_timer(true, conditioningTime, millis());
-                _electro_cond_flag = true;
-                cycleTask++;
+                LiftDown();
             }
+            set_mod_timer(true, 60000, millis());
+            _vacuum_flush_flag = true;
+            cycleTask++;
             break;
         case 5:
-            capillary_electroconditioning();
+         if (vacuumFlushTime > 0)
+            {
+                capillary_vacuum_flush();
+            }
             if (_switch_off_flag)
             {
                 _switch_off_flag = false;
-                HVOFF();
+                setPumpOFF();
                 cycleTask++;
             }
             break;
@@ -387,71 +455,189 @@ void AnalysisHandling::handleAnalysisCycle()
             cycleTask++;
             break;
         case 7:
-            while (!get_Sample())
+            while (!get_BGE(-1))
             {
-                get_Sample();
+                get_BGE(-1);
             }
-            cycleTask++;
-            break;
-        case 8:
             while (!LiftUp())
             {
                 LiftUp();
             }
+            set_mod_timer(true, 60000, millis());
+            _vacuum_flush_flag = true;
             cycleTask++;
+            break;
+        case 8:
+            if (vacuumFlushTime > 0)
+            {
+                capillary_vacuum_flush();
+            }
+            if (_switch_off_flag)
+            {
+                _switch_off_flag = false;
+                setPumpOFF();
+                cycleTask++;
+            }
             break;
         case 9:
-            while (!performInjection())
-            {
-                performInjection();
-            }
-            cycleTask++;
-            break;
-        case 10:
             while (!LiftDown())
             {
                 LiftDown();
             }
             cycleTask++;
             break;
-        case 11:
-            while (!get_BGE2())
+        case 10:
+            while (!get_BGE(vialBGE1))
             {
-                get_BGE2();
+                get_BGE(vialBGE1);
             }
             cycleTask++;
             break;
-        case 12:
+        case 11:
             while (!LiftUp())
             {
                 LiftUp();
             }
+            // set_mod_timer(true, 20000, millis());
+            // // smplVlve_OFF();
+            // _vacuum_flush_flag = true;
             cycleTask++;
-            analysisWaitingFlag = true;
+            //        Serial.println(cycleTask);
+            break;
+        case 12:
+            cycleTask++;
             break;
         case 13:
+            // if (vacuumFlushTime > 0)
+            // {
+            //     capillary_vacuum_flush();
+            // }
+            // if (_switch_off_flag)
+            // {
+            //     _switch_off_flag = false;
+            //     setPumpOFF();
+            //     // smplVlve_OFF();
+            //     // deaerateSample();
+            //     cycleTask++;
+            // }
             cycleTask++;
             break;
         case 14:
-            cycleTask++;
+            if (_replenish_flag)
+            {
+                while (!replenish())
+                {
+                    replenish();
+                }
+                set_mod_timer(true, 60000, millis());
+                _vacuum_flush_flag = true;
+                cycleTask++;
+            }
+            else
+            {
+                set_mod_timer(true, vacuumFlushTime, millis());
+                _vacuum_flush_flag = true;
+                cycleTask++;
+            }
             break;
         case 15:
-            cycleTask++;
+            if (vacuumFlushTime > 0)
+            {
+                capillary_vacuum_flush();
+            }
+            if (_switch_off_flag)
+            {
+                _switch_off_flag = false;
+                setPumpOFF();
+                // smplVlve_OFF();
+                // deaerateSample();
+                // set_mod_timer(true, flushTime, millis());
+                // _pressure_flush_flag = true;
+                cycleTask++;
+            }
             break;
         case 16:
+        // if (flushTime > 0)
+        //     {
+        //         capillary_pressure_flush();
+        //     }
+        //     if (_switch_off_flag)
+        //     {
+        //         _switch_off_flag = false;
+        //         // setValvesOFF();
+        //         setPumpOFF();
+        //         set_mod_timer(true, conditioningTime, millis());
+        //         _electro_cond_flag = true;
+        //         cycleTask++;
+        //     }
             cycleTask++;
             break;
         case 17:
+            // capillary_electroconditioning();
+            //     if (_switch_off_flag)
+            //     {
+            //         _switch_off_flag = false;
+            //         HVOFF();
+            //         cycleTask++;
+            //     }
             cycleTask++;
             break;
         case 18:
-            cycleTask++;
+            if (_replenish_flag)
+            {
+                while (!LiftDown())
+                {
+                    LiftDown();
+                }
+                while (!get_BGE(vialBGE2))
+                {
+                    get_BGE(vialBGE2);
+                }
+                while (!LiftUp())
+                {
+                    LiftUp();
+                }
+                cycleTask++;
+            }
+            else
+            {
+                cycleTask++;
+            }
             break;
         case 19:
-            cycleTask++;
+            if (_replenish_flag)
+            {
+                while (!replenish())
+                {
+                    replenish();
+                }
+                set_mod_timer(true, vacuumFlushTime, millis());
+                _vacuum_flush_flag = true;
+                cycleTask++;
+            }
+            else
+            {
+                cycleTask++;
+            }
             break;
         case 20:
-            cycleTask++;
+            if (_replenish_flag)
+            {
+                if (vacuumFlushTime > 0)
+                {
+                    capillary_vacuum_flush();
+                }
+                if (_switch_off_flag)
+                {
+                    _switch_off_flag = false;
+                    setPumpOFF();
+                    cycleTask++;
+                }
+            }
+            else
+            {
+                cycleTask++;
+            }          
             break;
         case 21:
             cycleTask++;
@@ -460,9 +646,68 @@ void AnalysisHandling::handleAnalysisCycle()
             cycleTask++;
             break;
         case 23:
-            startCEanalysis();
+            cycleTask++;
             break;
         case 24:
+            cycleTask++;
+            break;
+        case 25:
+            while (!LiftDown())
+            {
+                LiftDown();
+            }
+            cycleTask++;
+            break;
+        case 26:
+            while (!get_Sample(0))
+            {
+                get_Sample(0);
+            }
+            cycleTask++;
+            break;
+        case 27:
+            while (!LiftUp())
+            {
+                LiftUp();
+            }
+            cycleTask++;
+            break;
+        case 28:
+            while (!performInjection())
+            {
+                performInjection();
+            }
+            cycleTask++;
+            break;
+        case 29:
+            while (!LiftDown())
+            {
+                LiftDown();
+            }
+            cycleTask++;
+            break;
+        case 30:
+            while (!get_BGE(vialBGE2))
+            {
+                get_BGE(vialBGE2);
+            }
+            cycleTask++;
+            break;
+        case 31:
+            while (!LiftUp())
+            {
+                LiftUp();
+            }
+            cycleTask++;
+            analysisWaitingFlag = true;
+            break;
+        case 32:
+            cycleTask++;
+            break;
+        case 33:
+            startCEanalysis();
+            break;
+        case 34:
             finishCEanalysis();
             break;
         default:
@@ -505,4 +750,14 @@ void AnalysisHandling::setOnVacuumFlush()
 void AnalysisHandling::setOffVacuumFlush()
 {
     vacuumFlushTime = 0;
+}
+
+void AnalysisHandling::set_replenish_flag(bool flag)
+{
+    _replenish_flag = flag;
+}
+
+void AnalysisHandling::set_sampling_flag(bool flag)
+{
+    _sampling_flag = flag;
 }

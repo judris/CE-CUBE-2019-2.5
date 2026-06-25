@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <../RF24master/nRF24L01.h>
 #include <../RF24master/RF24.h>
-#include <printf.h>
+// #include <printf.h>
 
 class NRFhandler
 {
@@ -11,6 +11,7 @@ class NRFhandler
     const uint64_t pipes[2] = {0xDEDEDEDEE7LL, 0xDEDEDEDEE9LL};
 
     int dataBufferIndex = 0;
+    int _nrf_channel = 46;
     
     bool _data_flag;
     bool _end_flag;
@@ -21,6 +22,7 @@ class NRFhandler
     
     String _combined_data;
     String _data_for_combining;
+    // char _ack_string[15] = "{\"ack\":\"OK\"}";
 
   public:
     NRFhandler(/* args */);
@@ -35,7 +37,10 @@ class NRFhandler
 
     void nrf_send_data(char serial_buffer[32]);
     void nfr_send_multi_strings(char sendA_buffer[32], char sendB_buffer[32]);
-    void send_start_signal();
+    void nrf_send_ack();
+
+    int get_nrf_channel();
+    // void send_start_signal();
 };
 
 NRFhandler::NRFhandler(/* args */)
@@ -45,6 +50,11 @@ NRFhandler::NRFhandler(/* args */)
 
 NRFhandler::~NRFhandler()
 {
+}
+
+int NRFhandler::get_nrf_channel()
+{
+    return _nrf_channel;
 }
 
 bool NRFhandler::nrf_wait_for_data()
@@ -61,6 +71,7 @@ bool NRFhandler::nrf_wait_for_data()
         }
 
         RecvPayload[len] = 0; // null terminate string
+        Serial.println(RecvPayload);
         // RecvPayload[0] = 0;  // Clear the buffers
         // Serial.println(RecvPayload);
         // RecvPayload[0] = 0;
@@ -76,12 +87,12 @@ bool NRFhandler::nrf_wait_for_data()
 
 void NRFhandler::nrf_init()
 {
-    printf_begin();
+    // printf_begin();
     radio.begin();
 
     radio.setDataRate(RF24_250KBPS);
     radio.setPALevel(RF24_PA_MAX);
-    radio.setChannel(61);
+    radio.setChannel(_nrf_channel);
 
     radio.enableDynamicPayloads();
     radio.setRetries(15, 15);
@@ -101,7 +112,8 @@ void NRFhandler::nrf_init()
 char *NRFhandler::get_received_data()
 {
     return RecvPayload;
-    RecvPayload[0] = 0;
+    // memset(RecvPayload, 0, sizeof(RecvPayload)); //if new data is being received, clear the buffer (2019 02 12)
+    RecvPayload[0] = 0; //2019 02 12
 }
 
 void NRFhandler::combine_strings()
@@ -153,13 +165,18 @@ void NRFhandler::nrf_send_data(char serial_buffer[32])
 
     //        Serial.print("S:");
 
-    //        Serial.println(SendPayload);
+           Serial.println(SendPayload);
     //        Serial.println();
         // restore TX & Rx addr for reading
     radio.openWritingPipe(pipes[0]);
     radio.openReadingPipe(1, pipes[1]);
     radio.startListening();
     SendPayload[0] = 0;
+}
+
+void NRFhandler::nrf_send_ack()
+{
+    nrf_send_data("OK");
 }
 
 void NRFhandler::nfr_send_multi_strings(char sendA_buffer[32], char sendB_buffer[32])
@@ -184,7 +201,7 @@ void NRFhandler::nfr_send_multi_strings(char sendA_buffer[32], char sendB_buffer
   dataBufferIndex = 0;
 }
 
-void NRFhandler::send_start_signal() {
-//   nrf_send_data(_startString);
-  Serial.println("start signal sent");
-}
+// void NRFhandler::send_start_signal() {
+// //   nrf_send_data(_startString);
+//   Serial.println("start signal sent");
+// }

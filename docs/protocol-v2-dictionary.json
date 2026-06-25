@@ -1,0 +1,191 @@
+{
+  "documented_by": "Codex (OpenAI GPT-5 coding agent)",
+  "timestamp": "2026-06-25 10:06:32 +03:00",
+  "protocol_version": 2,
+  "kind": {
+    "1": "telemetry",
+    "2": "command",
+    "3": "ack",
+    "4": "error",
+    "5": "event"
+  },
+  "command": {
+    "1": "sensor.set_rate",
+    "2": "sensor.set_excitation",
+    "3": "sensor.temp_comp",
+    "4": "sensor.auto_zero",
+    "5": "lift.move",
+    "6": "carousel.step",
+    "7": "carousel.goto_slot",
+    "8": "carousel.adjust",
+    "9": "hv.set",
+    "10": "pump.set",
+    "11": "valve.set",
+    "12": "injection.configure",
+    "13": "run.start",
+    "14": "run.stop",
+    "15": "run.status",
+    "16": "protocol.begin",
+    "17": "protocol.chunk",
+    "18": "protocol.commit",
+    "19": "protocol.info",
+    "20": "protocol.clear",
+    "21": "status.get"
+  },
+  "ack": {
+    "0": "accepted",
+    "1": "status"
+  },
+  "error": {
+    "1": "invalid_json",
+    "2": "invalid_field",
+    "3": "invalid_command",
+    "4": "busy",
+    "5": "overflow",
+    "6": "rf_crc",
+    "7": "rf_fragment",
+    "8": "sensor_io",
+    "9": "sensor_config",
+    "10": "not_ready",
+    "11": "protocol_invalid",
+    "12": "protocol_crc",
+    "13": "protocol_bounds",
+    "14": "protocol_opcode",
+    "15": "storage",
+    "16": "unavailable"
+  },
+  "event": {
+    "1": "run_start",
+    "2": "run_stop",
+    "3": "sample_ready",
+    "4": "protocol_info"
+  },
+  "field": {
+    "v": "protocol_version",
+    "k": "message_kind",
+    "s": "sequence",
+    "c": "command_id",
+    "a": "ack_code",
+    "e": "error_code",
+    "ev": "event_code",
+    "gt": "global_time_ms",
+    "at": "analysis_time_ms",
+    "en": "enable",
+    "cl": "clear_zero",
+    "lp": "lift_position",
+    "st": "steps",
+    "sl": "slot_or_sample_slot",
+    "ad": "adjust_direction",
+    "vi": "valve_id",
+    "im": "injection_mode",
+    "du": "duration_ms",
+    "rh": "rate_hz",
+    "fh": "freq_hz",
+    "xl": "excitation_level",
+    "sc": "slot_count",
+    "b1": "bge1_slot",
+    "b2": "bge2_slot",
+    "s1": "sample_1_slot",
+    "sn": "sample_count",
+    "rr": "repetitions",
+    "w0": "wait_0_ms",
+    "w1": "wait_1_ms",
+    "w2": "wait_2_ms",
+    "w3": "wait_3_ms",
+    "w4": "wait_4_ms",
+    "w5": "wait_5_ms",
+    "w6": "wait_6_ms",
+    "w7": "wait_7_ms",
+    "of": "offset",
+    "dt": "data",
+    "ln": "program_length",
+    "cr": "crc16",
+    "cp": "cap_pf",
+    "tc": "temp_c",
+    "ss": "sensor_status",
+    "pp": "pressure_pa",
+    "ps": "pressure_status",
+    "hv": "hv",
+    "pm": "pump",
+    "v1": "valve1",
+    "v2": "valve2",
+    "pv": "protocol_valid",
+    "lf": "lift",
+    "cs": "carousel_pos",
+    "rs": "run_state",
+    "pc": "run_pc",
+    "si": "sample_index",
+    "ri": "repetition",
+    "ff": "faults"
+  },
+  "timing": {
+    "global_time_ms": {
+      "field": "gt",
+      "messages": [
+        "event"
+      ],
+      "units": "ms",
+      "reference": "milliseconds since firmware boot"
+    },
+    "analysis_time_ms": {
+      "field": "at",
+      "messages": [
+        "telemetry",
+        "event"
+      ],
+      "units": "ms",
+      "reference": "milliseconds since the most recent EVENT_RUN_START opcode",
+      "optional_until_valid": true
+    }
+  },
+  "enum": {
+    "sensor_status": {
+      "0": "ok",
+      "1": "not_ready",
+      "2": "bus_error",
+      "3": "config_error",
+      "4": "invalid_sample"
+    },
+    "pressure_status": {
+      "0": "ok",
+      "1": "unavailable",
+      "2": "bus_error",
+      "3": "config_error"
+    },
+    "run_state": {
+      "0": "idle",
+      "1": "running",
+      "2": "complete",
+      "3": "stopped",
+      "4": "fault"
+    },
+    "lift_position": {
+      "0": "down",
+      "1": "up"
+    },
+    "lift_state": {
+      "0": "down",
+      "1": "moving_up",
+      "2": "up",
+      "3": "moving_down"
+    },
+    "injection_mode": {
+      "0": "hydrodynamic",
+      "1": "electrokinetic"
+    },
+    "excitation_level": {
+      "0": "vdd_8",
+      "1": "vdd_4",
+      "2": "vdd_3_8",
+      "3": "vdd_2"
+    },
+    "excitation_frequency_hz": {
+      "16000": "16kHz",
+      "32000": "32kHz"
+    },
+    "adjust_direction": {
+      "-1": "counterclockwise",
+      "1": "clockwise"
+    }
+  }
+}

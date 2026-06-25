@@ -5,7 +5,7 @@ class CurrentHandling
   private:
     /* data */
     float _current;
-    bool read_current_flag = true;
+    // bool read_current_flag = true;
     static const uint8_t _currentSensePin = A6;
 
   public:
@@ -40,5 +40,5 @@ void CurrentHandling::read_current()
         AVG1 = AVG1 + Creading[i];
     }
     _current = float(AVG1) / float(_avgNum);
-    _current = _current * 0.007229;
+    _current = _current * 0.022154696;//0.011077348;
 }
