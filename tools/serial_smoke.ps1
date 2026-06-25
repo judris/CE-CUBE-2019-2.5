@@ -5,7 +5,8 @@ param(
 
     [Parameter(Mandatory = $false)]
     [ValidateSet('manual-smoke', 'current-build-smoke', 'usb-build-smoke',
-                 'automation-smoke', 'list-ports')]
+                 'automation-smoke', 'seed-minimal-protocol',
+                 'eeprom-roundtrip', 'list-ports')]
     [string]$Mode = 'manual-smoke',
 
     [Parameter(Mandatory = $false)]
@@ -35,6 +36,9 @@ $ErrorActionPreference = 'Stop'
 
 $script:TranscriptPath = $null
 $script:ProtocolVersion = 2
+$script:ProtocolChunkDataBytes = 8
+$script:ProtocolStoreFaultBit = 16
+$script:AnalysisTimeToleranceMs = 25
 
 $script:MessageKind = @{
     Telemetry = 1
@@ -177,6 +181,18 @@ function Get-ModeExpectedFaults {
         }
         return 36
     }
+    if ($SelectedMode -eq 'seed-minimal-protocol') {
+        if ($RequestedFaults -ge 0) {
+            return $RequestedFaults
+        }
+        return 0
+    }
+    if ($SelectedMode -eq 'eeprom-roundtrip') {
+        if ($RequestedFaults -ge 0) {
+            return $RequestedFaults
+        }
+        return 4
+    }
     if ($RequestedFaults -ge 0) {
         return $RequestedFaults
     }
@@ -249,6 +265,93 @@ function Assert-True {
     if (-not $Condition) {
         Fail-Test $Label
     }
+}
+
+function Assert-IntWithin {
+    param(
+        [int]$Actual,
+        [int]$Expected,
+        [int]$Tolerance,
+        [string]$Label
+    )
+
+    $delta = [Math]::Abs($Actual - $Expected)
+    if ($delta -gt $Tolerance) {
+        Fail-Test "$Label mismatch. Expected '$Expected +/- $Tolerance', got '$Actual'"
+    }
+}
+
+function Compute-Crc16Ccitt {
+    param([byte[]]$Data)
+
+    $crc = 0xFFFF
+    for ($index = 0; $index -lt $Data.Length; ++$index) {
+        $crc = ($crc -bxor (($Data[$index] -band 0xFF) -shl 8)) -band 0xFFFF
+        for ($bit = 0; $bit -lt 8; ++$bit) {
+            if (($crc -band 0x8000) -ne 0) {
+                $crc = ((($crc -shl 1) -bxor 0x1021) -band 0xFFFF)
+            } else {
+                $crc = (($crc -shl 1) -band 0xFFFF)
+            }
+        }
+    }
+
+    return [uint16]$crc
+}
+
+function Get-MinimalProtocolDefinition {
+    $metadata = [ordered]@{
+        sc = 12
+        b1 = 0
+        b2 = 1
+        s1 = 5
+        sn = 1
+        rr = 1
+        im = 1
+        cd = 1000
+        jd = 1000
+        dd = 1000
+        w0 = 1000
+        w1 = 0
+        w2 = 0
+        w3 = 0
+        w4 = 0
+        w5 = 0
+        w6 = 0
+        w7 = 0
+    }
+    $program = [byte[]]@(
+        0x00,
+        0x61,
+        0x50,
+        0x62,
+        0x00
+    )
+
+    return @{
+        Metadata = $metadata
+        PrepareLength = 1
+        Program = $program
+    }
+}
+
+function Convert-ProgramChunkToHex {
+    param(
+        [byte[]]$Program,
+        [int]$Offset
+    )
+
+    $chunk = New-Object byte[] $script:ProtocolChunkDataBytes
+    for ($index = 0; $index -lt $script:ProtocolChunkDataBytes; ++$index) {
+        $programIndex = $Offset + $index
+        if ($programIndex -lt $Program.Length) {
+            $chunk[$index] = $Program[$programIndex]
+        } else {
+            $chunk[$index] = 0
+        }
+    }
+
+    return ([System.BitConverter]::ToString($chunk)).Replace('-', '')
 }
 
 function Receive-JsonMessage {
@@ -342,7 +445,7 @@ function New-CommandJson {
     param(
         [uint16]$Seq,
         [uint16]$Command,
-        [hashtable]$Fields
+        [System.Collections.IDictionary]$Fields
     )
 
     $body = [ordered]@{
@@ -376,7 +479,7 @@ function Invoke-CommandExpectAck {
         [System.IO.Ports.SerialPort]$SerialPort,
         [ref]$NextSeq,
         [uint16]$Command,
-        [hashtable]$Fields,
+        [System.Collections.IDictionary]$Fields,
         [string]$Label
     )
 
@@ -398,7 +501,7 @@ function Invoke-CommandExpectError {
         [System.IO.Ports.SerialPort]$SerialPort,
         [ref]$NextSeq,
         [uint16]$Command,
-        [hashtable]$Fields,
+        [System.Collections.IDictionary]$Fields,
         [int]$ExpectedCode,
         [string]$Label
     )
@@ -447,8 +550,9 @@ function Assert-BaselineTelemetry {
         [int]$Faults
     )
 
-    Assert-Equal -Actual (Get-JsonFieldValue $Telemetry 'pv') -Expected 1 `
-        -Label 'pv'
+    $protocolValid = [int](Get-JsonFieldValue $Telemetry 'pv')
+    Assert-True -Condition (($protocolValid -eq 0) -or ($protocolValid -eq 1)) `
+        -Label 'pv should be 0 or 1 on an idle board'
     Assert-Equal -Actual (Get-JsonFieldValue $Telemetry 'hv') -Expected 0 `
         -Label 'hv'
     Assert-Equal -Actual (Get-JsonFieldValue $Telemetry 'pm') -Expected 0 `
@@ -465,7 +569,11 @@ function Assert-BaselineTelemetry {
         -Label 'ps'
     Assert-Equal -Actual (Get-JsonFieldValue $Telemetry 'ss') -Expected 2 `
         -Label 'ss'
-    Assert-Equal -Actual (Get-JsonFieldValue $Telemetry 'ff') -Expected $Faults `
+    $expectedFaults = $Faults
+    if ($protocolValid -eq 0) {
+        $expectedFaults += $script:ProtocolStoreFaultBit
+    }
+    Assert-Equal -Actual (Get-JsonFieldValue $Telemetry 'ff') -Expected $expectedFaults `
         -Label 'ff'
     Assert-True -Condition (-not (Has-JsonField $Telemetry 'gt')) `
         -Label 'Idle telemetry should omit gt'
@@ -503,7 +611,7 @@ function Invoke-OutputLatchCheck {
         [System.IO.Ports.SerialPort]$SerialPort,
         [ref]$NextSeq,
         [uint16]$Command,
-        [hashtable]$Fields,
+        [System.Collections.IDictionary]$Fields,
         [string]$Label,
         [string]$TelemetryField,
         [int]$ExpectedValue
@@ -522,7 +630,8 @@ function Assert-EventMessage {
     param(
         [object]$EventJson,
         [int]$ExpectedEvent,
-        [int]$ExpectedAnalysisTime = -1
+        [int]$ExpectedAnalysisTime = -1,
+        [int]$ExpectedAnalysisTimeToleranceMs = 0
     )
 
     Assert-Equal -Actual (Get-JsonFieldValue $EventJson 'k') `
@@ -538,9 +647,221 @@ function Assert-EventMessage {
     if ($ExpectedAnalysisTime -ge 0) {
         Assert-True -Condition (Has-JsonField $EventJson 'at') `
             -Label 'Timed event should include at'
-        Assert-Equal -Actual (Get-JsonFieldValue $EventJson 'at') `
-            -Expected $ExpectedAnalysisTime -Label 'Event analysis time'
+        if ($ExpectedAnalysisTimeToleranceMs -gt 0) {
+            Assert-IntWithin -Actual ([int](Get-JsonFieldValue $EventJson 'at')) `
+                -Expected $ExpectedAnalysisTime `
+                -Tolerance $ExpectedAnalysisTimeToleranceMs `
+                -Label 'Event analysis time'
+        } else {
+            Assert-Equal -Actual (Get-JsonFieldValue $EventJson 'at') `
+                -Expected $ExpectedAnalysisTime -Label 'Event analysis time'
+        }
     }
+}
+
+function Invoke-ProtocolInfoRequest {
+    param(
+        [System.IO.Ports.SerialPort]$SerialPort,
+        [ref]$NextSeq
+    )
+
+    $seq = [uint16]$NextSeq.Value
+    $NextSeq.Value = [uint16]($NextSeq.Value + 1)
+    $json = New-CommandJson -Seq $seq -Command $script:CommandId.ProtocolInfo -Fields $null
+    Send-CommandJson -SerialPort $SerialPort -Json $json
+
+    $ack = Receive-ExpectedMessage -SerialPort $SerialPort `
+        -TimeoutMs $ImmediateTimeoutMs -ExpectedKind $script:MessageKind.Ack `
+        -MatchSeq $true -ExpectedSeq $seq `
+        -SkippableKinds @($script:MessageKind.Telemetry, $script:MessageKind.Event)
+    Assert-Equal -Actual (Get-JsonFieldValue $ack.Json 'a') `
+        -Expected $script:AckCode.Status -Label 'Ack code for protocol.info'
+
+    $event = Receive-ExpectedMessage -SerialPort $SerialPort `
+        -TimeoutMs $FollowupTimeoutMs -ExpectedKind $script:MessageKind.Event `
+        -SkippableKinds @($script:MessageKind.Telemetry)
+    Assert-EventMessage -EventJson $event.Json `
+        -ExpectedEvent $script:EventCode.ProtocolInfo
+    return $event.Json
+}
+
+function Assert-ProtocolInfoMatches {
+    param(
+        [object]$ProtocolInfoEvent,
+        [int]$ExpectedValid,
+        [int]$ExpectedPrepareLength,
+        [int]$ExpectedProgramLength,
+        [int]$ExpectedCrc,
+        [System.Collections.IDictionary]$ExpectedMetadata = $null
+    )
+
+    Assert-Equal -Actual (Get-JsonFieldValue $ProtocolInfoEvent 'pv') `
+        -Expected $ExpectedValid -Label 'protocol.info pv'
+    Assert-Equal -Actual (Get-JsonFieldValue $ProtocolInfoEvent 'pl') `
+        -Expected $ExpectedPrepareLength -Label 'protocol.info pl'
+    Assert-Equal -Actual (Get-JsonFieldValue $ProtocolInfoEvent 'ln') `
+        -Expected $ExpectedProgramLength -Label 'protocol.info ln'
+    Assert-Equal -Actual (Get-JsonFieldValue $ProtocolInfoEvent 'cr') `
+        -Expected $ExpectedCrc -Label 'protocol.info cr'
+
+    if ($null -eq $ExpectedMetadata) {
+        return
+    }
+
+    foreach ($fieldName in @('sc', 'b1', 'b2', 's1', 'sn', 'rr', 'im', 'cd', 'jd', 'dd')) {
+        Assert-Equal -Actual (Get-JsonFieldValue $ProtocolInfoEvent $fieldName) `
+            -Expected $ExpectedMetadata[$fieldName] -Label "protocol.info $fieldName"
+    }
+
+    foreach ($fieldName in @('w0', 'w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7')) {
+        Assert-Equal -Actual (Get-JsonFieldValue $ProtocolInfoEvent $fieldName) `
+            -Expected $ExpectedMetadata[$fieldName] -Label "protocol.info $fieldName"
+    }
+}
+
+function Invoke-ProtocolUpload {
+    param(
+        [System.IO.Ports.SerialPort]$SerialPort,
+        [ref]$NextSeq,
+        [System.Collections.IDictionary]$Metadata,
+        [byte[]]$Program,
+        [int]$PrepareLength,
+        [string]$LabelPrefix
+    )
+
+    $null = Invoke-CommandExpectAck -SerialPort $SerialPort -NextSeq $NextSeq `
+        -Command $script:CommandId.ProtocolBegin -Fields $Metadata `
+        -Label "$LabelPrefix.begin"
+
+    for ($offset = 0; $offset -lt $Program.Length; $offset += $script:ProtocolChunkDataBytes) {
+        $chunkFields = [ordered]@{
+            of = $offset
+            dt = Convert-ProgramChunkToHex -Program $Program -Offset $offset
+        }
+        $null = Invoke-CommandExpectAck -SerialPort $SerialPort -NextSeq $NextSeq `
+            -Command $script:CommandId.ProtocolChunk -Fields $chunkFields `
+            -Label "$LabelPrefix.chunk@$offset"
+    }
+
+    $crc16 = Compute-Crc16Ccitt -Data $Program
+    $commitFields = [ordered]@{
+        pl = $PrepareLength
+        ln = $Program.Length
+        cr = $crc16
+    }
+    $null = Invoke-CommandExpectAck -SerialPort $SerialPort -NextSeq $NextSeq `
+        -Command $script:CommandId.ProtocolCommit -Fields $commitFields `
+        -Label "$LabelPrefix.commit"
+}
+
+function Invoke-MinimalProtocolSeed {
+    param(
+        [System.IO.Ports.SerialPort]$SerialPort,
+        [ref]$NextSeq
+    )
+
+    Write-Log 'Seeding minimal EEPROM protocol.'
+    $baseline = Invoke-StatusRequest -SerialPort $SerialPort -NextSeq $NextSeq
+    $baselineFaults = [int](Get-JsonFieldValue $baseline 'ff')
+    $baselineProtocolValid = [int](Get-JsonFieldValue $baseline 'pv')
+    Write-Log "Baseline protocol_valid=$baselineProtocolValid faults=$baselineFaults"
+
+    $definition = Get-MinimalProtocolDefinition
+    Invoke-ProtocolUpload -SerialPort $SerialPort -NextSeq $NextSeq `
+        -Metadata $definition.Metadata -Program $definition.Program `
+        -PrepareLength $definition.PrepareLength -LabelPrefix 'seed'
+
+    $afterCommit = Invoke-StatusRequest -SerialPort $SerialPort -NextSeq $NextSeq
+    Assert-Equal -Actual (Get-JsonFieldValue $afterCommit 'pv') -Expected 1 `
+        -Label 'pv after seed'
+    $expectedFaults = ($baselineFaults -band 0xFFEF)
+    Assert-Equal -Actual (Get-JsonFieldValue $afterCommit 'ff') `
+        -Expected $expectedFaults -Label 'ff after seed'
+    Write-Log 'Minimal EEPROM protocol seeded successfully.'
+}
+
+function Assert-MinimalProtocolRun {
+    param(
+        [System.IO.Ports.SerialPort]$SerialPort,
+        [ref]$NextSeq,
+        [int]$Faults
+    )
+
+    $null = Invoke-CommandExpectAck -SerialPort $SerialPort -NextSeq $NextSeq `
+        -Command $script:CommandId.RunStart -Fields $null -Label 'run.start'
+
+    $runStartMessage = Receive-ExpectedMessage -SerialPort $SerialPort `
+        -TimeoutMs $ImmediateTimeoutMs -ExpectedKind $script:MessageKind.Event `
+        -SkippableKinds @($script:MessageKind.Telemetry)
+    Assert-EventMessage -EventJson $runStartMessage.Json `
+        -ExpectedEvent $script:EventCode.RunStart -ExpectedAnalysisTime 0
+
+    $runStopMessage = Receive-ExpectedMessage -SerialPort $SerialPort `
+        -TimeoutMs $AutomationTimeoutMs -ExpectedKind $script:MessageKind.Event `
+        -SkippableKinds @($script:MessageKind.Telemetry)
+    Assert-EventMessage -EventJson $runStopMessage.Json `
+        -ExpectedEvent $script:EventCode.RunStop -ExpectedAnalysisTime 1000 `
+        -ExpectedAnalysisTimeToleranceMs $script:AnalysisTimeToleranceMs
+
+    $completeTelemetry = Wait-ForTelemetryField -SerialPort $SerialPort `
+        -NextSeq $NextSeq -FieldName 'rs' -ExpectedValue 2 `
+        -TimeoutMs $AutomationTimeoutMs
+    Assert-True -Condition (Has-JsonField $completeTelemetry 'at') `
+        -Label 'Completed run telemetry should include at'
+    Assert-IntWithin -Actual ([int](Get-JsonFieldValue $completeTelemetry 'at')) `
+        -Expected 1000 -Tolerance $script:AnalysisTimeToleranceMs `
+        -Label 'Completed run analysis time'
+    Assert-Equal -Actual (Get-JsonFieldValue $completeTelemetry 'ff') `
+        -Expected $Faults -Label 'ff after minimal protocol run'
+}
+
+function Invoke-EepromRoundTripTest {
+    param(
+        [System.IO.Ports.SerialPort]$SerialPort,
+        [ref]$NextSeq,
+        [int]$Faults
+    )
+
+    Write-Log 'Running EEPROM round-trip test.'
+    $baseline = Invoke-StatusRequest -SerialPort $SerialPort -NextSeq $NextSeq
+    Assert-BaselineTelemetry -Telemetry $baseline -Faults $Faults
+
+    $null = Invoke-CommandExpectAck -SerialPort $SerialPort -NextSeq $NextSeq `
+        -Command $script:CommandId.ProtocolClear -Fields $null `
+        -Label 'protocol.clear'
+    $afterClear = Invoke-StatusRequest -SerialPort $SerialPort -NextSeq $NextSeq
+    Assert-Equal -Actual (Get-JsonFieldValue $afterClear 'pv') -Expected 0 `
+        -Label 'pv after clear'
+    Assert-Equal -Actual (Get-JsonFieldValue $afterClear 'ff') `
+        -Expected ($Faults + $script:ProtocolStoreFaultBit) `
+        -Label 'ff after clear'
+
+    $emptyInfo = Invoke-ProtocolInfoRequest -SerialPort $SerialPort -NextSeq $NextSeq
+    Assert-ProtocolInfoMatches -ProtocolInfoEvent $emptyInfo `
+        -ExpectedValid 0 -ExpectedPrepareLength 0 `
+        -ExpectedProgramLength 0 -ExpectedCrc 0
+
+    $definition = Get-MinimalProtocolDefinition
+    Invoke-ProtocolUpload -SerialPort $SerialPort -NextSeq $NextSeq `
+        -Metadata $definition.Metadata -Program $definition.Program `
+        -PrepareLength $definition.PrepareLength -LabelPrefix 'eeprom'
+
+    $expectedCrc = Compute-Crc16Ccitt -Data $definition.Program
+    $afterCommit = Invoke-StatusRequest -SerialPort $SerialPort -NextSeq $NextSeq
+    Assert-Equal -Actual (Get-JsonFieldValue $afterCommit 'pv') -Expected 1 `
+        -Label 'pv after eeprom write'
+    Assert-Equal -Actual (Get-JsonFieldValue $afterCommit 'ff') `
+        -Expected $Faults -Label 'ff after eeprom write'
+
+    $storedInfo = Invoke-ProtocolInfoRequest -SerialPort $SerialPort -NextSeq $NextSeq
+    Assert-ProtocolInfoMatches -ProtocolInfoEvent $storedInfo `
+        -ExpectedValid 1 -ExpectedPrepareLength $definition.PrepareLength `
+        -ExpectedProgramLength $definition.Program.Length -ExpectedCrc $expectedCrc `
+        -ExpectedMetadata $definition.Metadata
+
+    Assert-MinimalProtocolRun -SerialPort $SerialPort -NextSeq $NextSeq `
+        -Faults $Faults
+    Write-Log 'EEPROM round-trip test passed.'
 }
 
 function Invoke-ManualSmoke {
@@ -646,62 +967,18 @@ function Invoke-AutomationSmoke {
     $baseline = Invoke-StatusRequest -SerialPort $SerialPort -NextSeq $NextSeq
     Assert-BaselineTelemetry -Telemetry $baseline -Faults $Faults
 
-    $waitFields = [ordered]@{
-        sc = 12
-        b1 = 0
-        b2 = 1
-        s1 = 5
-        sn = 1
-        rr = 1
-        w0 = 1000
-        w1 = 0
-        w2 = 0
-        w3 = 0
-        w4 = 0
-        w5 = 0
-        w6 = 0
-        w7 = 0
-    }
-    $null = Invoke-CommandExpectAck -SerialPort $SerialPort -NextSeq $NextSeq `
-        -Command $script:CommandId.ProtocolBegin -Fields $waitFields `
-        -Label 'protocol.begin'
-    $null = Invoke-CommandExpectAck -SerialPort $SerialPort -NextSeq $NextSeq `
-        -Command $script:CommandId.ProtocolChunk `
-        -Fields ([ordered]@{ of = 0; dt = '6150620000000000' }) `
-        -Label 'protocol.chunk'
-    $null = Invoke-CommandExpectAck -SerialPort $SerialPort -NextSeq $NextSeq `
-        -Command $script:CommandId.ProtocolCommit `
-        -Fields ([ordered]@{ ln = 4; cr = 38944 }) `
-        -Label 'protocol.commit'
+    $definition = Get-MinimalProtocolDefinition
+    Invoke-ProtocolUpload -SerialPort $SerialPort -NextSeq $NextSeq `
+        -Metadata $definition.Metadata -Program $definition.Program `
+        -PrepareLength $definition.PrepareLength -LabelPrefix 'protocol'
 
     $afterCommit = Invoke-StatusRequest -SerialPort $SerialPort -NextSeq $NextSeq
     Assert-Equal -Actual (Get-JsonFieldValue $afterCommit 'pv') -Expected 1 `
         -Label 'pv after commit'
-
-    $null = Invoke-CommandExpectAck -SerialPort $SerialPort -NextSeq $NextSeq `
-        -Command $script:CommandId.RunStart -Fields $null -Label 'run.start'
-
-    $runStartMessage = Receive-ExpectedMessage -SerialPort $SerialPort `
-        -TimeoutMs $ImmediateTimeoutMs -ExpectedKind $script:MessageKind.Event `
-        -SkippableKinds @($script:MessageKind.Telemetry)
-    Assert-EventMessage -EventJson $runStartMessage.Json `
-        -ExpectedEvent $script:EventCode.RunStart -ExpectedAnalysisTime 0
-
-    $runStopMessage = Receive-ExpectedMessage -SerialPort $SerialPort `
-        -TimeoutMs $AutomationTimeoutMs -ExpectedKind $script:MessageKind.Event `
-        -SkippableKinds @($script:MessageKind.Telemetry)
-    Assert-EventMessage -EventJson $runStopMessage.Json `
-        -ExpectedEvent $script:EventCode.RunStop -ExpectedAnalysisTime 1000
-
-    $completeTelemetry = Wait-ForTelemetryField -SerialPort $SerialPort `
-        -NextSeq $NextSeq -FieldName 'rs' -ExpectedValue 2 `
-        -TimeoutMs $AutomationTimeoutMs
-    Assert-True -Condition (Has-JsonField $completeTelemetry 'at') `
-        -Label 'Completed run telemetry should include at'
-    Assert-Equal -Actual (Get-JsonFieldValue $completeTelemetry 'at') `
-        -Expected 1000 -Label 'Completed run analysis time'
-    Assert-Equal -Actual (Get-JsonFieldValue $completeTelemetry 'ff') `
-        -Expected $Faults -Label 'ff after automation smoke'
+    Assert-Equal -Actual (Get-JsonFieldValue $afterCommit 'ff') `
+        -Expected $Faults -Label 'ff after commit'
+    Assert-MinimalProtocolRun -SerialPort $SerialPort -NextSeq $NextSeq `
+        -Faults $Faults
 
     Write-Log 'WARNING: EEPROM now contains the temporary smoke-test protocol.'
     Write-Log 'Automation smoke sequence passed.'
@@ -746,6 +1023,11 @@ try {
             -Faults $resolvedFaults
     } elseif ($Mode -eq 'automation-smoke') {
         Invoke-AutomationSmoke -SerialPort $serialPort -NextSeq ([ref]$nextSeq) `
+            -Faults $resolvedFaults
+    } elseif ($Mode -eq 'seed-minimal-protocol') {
+        Invoke-MinimalProtocolSeed -SerialPort $serialPort -NextSeq ([ref]$nextSeq)
+    } elseif ($Mode -eq 'eeprom-roundtrip') {
+        Invoke-EepromRoundTripTest -SerialPort $serialPort -NextSeq ([ref]$nextSeq) `
             -Faults $resolvedFaults
     } else {
         Fail-Test "Unsupported mode '$Mode'"

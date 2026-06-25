@@ -1,41 +1,9 @@
 #include "ce_cube/instrument_controller.hpp"
 
-#include "ce_cube/crc16.hpp"
 #include "ce_cube/feature_flags.hpp"
 
 namespace ce_cube {
 namespace {
-
-static constexpr uint8_t kDefaultPrepareProgram[] = {
-    static_cast<uint8_t>(ProtocolOpcode::kLiftDown),
-    static_cast<uint8_t>(ProtocolOpcode::kGotoSampleCurrent),
-    static_cast<uint8_t>(ProtocolOpcode::kLiftUp),
-    static_cast<uint8_t>(ProtocolOpcode::kCollectSample),
-    static_cast<uint8_t>(ProtocolOpcode::kEndSection),
-    static_cast<uint8_t>(ProtocolOpcode::kLiftDown),
-    static_cast<uint8_t>(ProtocolOpcode::kGotoBge1),
-    static_cast<uint8_t>(ProtocolOpcode::kLiftUp),
-    static_cast<uint8_t>(ProtocolOpcode::kHvOn),
-    static_cast<uint8_t>(static_cast<uint8_t>(ProtocolOpcode::kWaitBase) + 0U),
-    static_cast<uint8_t>(ProtocolOpcode::kHvOff),
-    static_cast<uint8_t>(ProtocolOpcode::kLiftDown),
-    static_cast<uint8_t>(ProtocolOpcode::kGotoSampleCurrent),
-    static_cast<uint8_t>(ProtocolOpcode::kLiftUp),
-    static_cast<uint8_t>(ProtocolOpcode::kEventSampleReady),
-    static_cast<uint8_t>(ProtocolOpcode::kInjectSample),
-    static_cast<uint8_t>(ProtocolOpcode::kLiftDown),
-    static_cast<uint8_t>(ProtocolOpcode::kGotoBge2),
-    static_cast<uint8_t>(ProtocolOpcode::kLiftUp),
-    static_cast<uint8_t>(ProtocolOpcode::kAutoZero),
-    static_cast<uint8_t>(ProtocolOpcode::kEventRunStart),
-    static_cast<uint8_t>(ProtocolOpcode::kHvOn),
-    static_cast<uint8_t>(static_cast<uint8_t>(ProtocolOpcode::kWaitBase) + 1U),
-    static_cast<uint8_t>(ProtocolOpcode::kHvOff),
-    static_cast<uint8_t>(ProtocolOpcode::kEventRunStop),
-    static_cast<uint8_t>(ProtocolOpcode::kEndSection),
-};
-
-static constexpr uint16_t kDefaultPrepareLength = 5U;
 static constexpr uint32_t kDefaultCollectionDurationMs = 10000UL;
 static constexpr uint32_t kDefaultInjectionDurationMs = 10000UL;
 static constexpr uint32_t kDefaultDropletDurationMs = 5000UL;
@@ -98,15 +66,6 @@ void InstrumentController::Initialize(uint32_t now_ms) {
   replenish_.Configure({85U, 178U, 500U});
   fluid_.Configure({300U, 200U, 5000U, 2U, 20000L, 40000L});
   protocol_store_.Begin();
-
-  const ProtocolMetadata metadata = DefaultProtocolMetadata();
-  const ProtocolStoreStatus default_status = protocol_store_.EnsureDefaultProtocol(
-      metadata, kDefaultPrepareLength, kDefaultPrepareProgram,
-      static_cast<uint16_t>(sizeof(kDefaultPrepareProgram)));
-  if (default_status != ProtocolStoreStatus::kOk) {
-    MarkFault(kFaultProtocolStore);
-  }
-
   LoadProtocolInfoFromStore();
   ResetAnalysisClock();
   sensor_config_dirty_ = true;

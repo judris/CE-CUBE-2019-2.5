@@ -1,7 +1,7 @@
 # CE-CUBE Project Documentation
 
 Documented by: Codex (OpenAI GPT-5 coding agent)
-Timestamp: 2026-06-25 10:06:32 +03:00
+Timestamp: 2026-06-25 22:30:26 +03:00
 
 ## Purpose
 
@@ -23,12 +23,19 @@ especially Arduino Nano ATmega328P.
   - testing strategy
   - current limitations
   - AVR-specific startup-construction note for `src/main.cpp`
+  - legacy-versus-current note about debug `Serial` usage versus the real USB
+    serial control path
 - `protocol-reference.md`
   - normative compact `v:2` wire protocol
   - compact timing fields for `gt` and `at`
   - RF24 size budgets
   - EEPROM-backed run protocol format
   - opcode map and status/fault summary
+- `eeprom-seeding.md`
+  - explicit EEPROM boot behavior
+  - minimal valid stored protocol
+  - PlatformIO and PowerShell seeding commands
+  - EEPROM round-trip test flow
 - `protocol-v1-to-v2-migration.md`
   - verbose-to-compact command mapping
   - reply/event numeric-code migration
@@ -53,10 +60,11 @@ especially Arduino Nano ATmega328P.
 
 1. `project-overview.md`
 2. `protocol-reference.md`
-3. `protocol-v1-to-v2-migration.md`
-4. `protocol-v2-dictionary.json`
-5. `bare-nano-smoke-test.md`
-6. `nano-flash-optimization.md`
+3. `eeprom-seeding.md`
+4. `protocol-v1-to-v2-migration.md`
+5. `protocol-v2-dictionary.json`
+6. `bare-nano-smoke-test.md`
+7. `nano-flash-optimization.md`
 
 ## Documentation Scope
 

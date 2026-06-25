@@ -85,6 +85,10 @@ Transition policy:
 | `sample_1_slot` | `s1` |
 | `sample_count` | `sn` |
 | `repetitions` | `rr` |
+| `injection_mode` | `im` |
+| `collection_duration_ms` | `cd` |
+| `injection_duration_ms` | `jd` |
+| `droplet_duration_ms` | `dd` |
 | `wait_0_ms` | `w0` |
 | `wait_1_ms` | `w1` |
 | `wait_2_ms` | `w2` |
@@ -186,13 +190,13 @@ Compact `v:2` equivalent:
 Verbose `protocol.begin`:
 
 ```json
-{"v":1,"kind":"command","seq":40,"cmd":"protocol.begin","slot_count":12,"bge1_slot":0,"bge2_slot":1,"sample_1_slot":5,"sample_count":1,"repetitions":1,"wait_0_ms":1000,"wait_1_ms":0,"wait_2_ms":0,"wait_3_ms":0,"wait_4_ms":0,"wait_5_ms":0,"wait_6_ms":0,"wait_7_ms":0}
+{"v":1,"kind":"command","seq":40,"cmd":"protocol.begin","slot_count":12,"bge1_slot":0,"bge2_slot":1,"sample_1_slot":5,"sample_count":1,"repetitions":1,"injection_mode":"electro","collection_duration_ms":1000,"injection_duration_ms":1000,"droplet_duration_ms":1000,"wait_0_ms":1000,"wait_1_ms":0,"wait_2_ms":0,"wait_3_ms":0,"wait_4_ms":0,"wait_5_ms":0,"wait_6_ms":0,"wait_7_ms":0}
 ```
 
 Compact `v:2` equivalent:
 
 ```json
-{"v":2,"k":2,"s":40,"c":16,"sc":12,"b1":0,"b2":1,"s1":5,"sn":1,"rr":1,"w0":1000,"w1":0,"w2":0,"w3":0,"w4":0,"w5":0,"w6":0,"w7":0}
+{"v":2,"k":2,"s":40,"c":16,"sc":12,"b1":0,"b2":1,"s1":5,"sn":1,"rr":1,"im":1,"cd":1000,"jd":1000,"dd":1000,"w0":1000,"w1":0,"w2":0,"w3":0,"w4":0,"w5":0,"w6":0,"w7":0}
 ```
 
 ## GUI Guidance

@@ -69,10 +69,6 @@ class ProtocolStore {
   ProtocolStoreStatus LoadInfo(ProtocolInfo* info) const;
   ProtocolStoreStatus ReadOpcode(uint16_t offset, uint8_t* opcode) const;
   ProtocolStoreStatus ReadWaitTimeMs(uint8_t index, uint32_t* wait_ms) const;
-  ProtocolStoreStatus EnsureDefaultProtocol(const ProtocolMetadata& metadata,
-                                            uint16_t prepare_length,
-                                            const uint8_t* program,
-                                            uint16_t program_length);
 
   static bool IsOpcodeValid(uint8_t opcode);
   static bool IsDirectSlotOpcode(uint8_t opcode);

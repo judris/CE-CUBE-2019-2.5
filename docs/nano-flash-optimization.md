@@ -60,17 +60,6 @@ RF24-enabled Nano build.
 This currently exceeds Nano flash under the present toolchain and is retained
 as a non-default profile for future flash-reduction work.
 
-### `nanoatmega328_full`
-
-Feature-complete Nano build.
-
-- RF24 enabled
-- pressure sensor enabled
-- `protocol.info` enabled
-
-This no longer fits after the compact protocol update and needs another flash
-reduction pass before it can be treated as shippable again.
-
 ### `nanoatmega328_usb`
 
 Lean USB-only Nano build.
@@ -82,6 +71,18 @@ Lean USB-only Nano build.
 
 Use this when the instrument is connected directly over USB and the RF24 link
 is not required. This is the current default and recommended Nano profile.
+
+### `nanoatmega328_usb_eepromtest`
+
+USB-only EEPROM verification build.
+
+- RF24 disabled
+- pressure sensor disabled
+- current-sense polling disabled
+- `protocol.info` enabled
+
+Use this only for hardware EEPROM round-trip testing, where the board needs to
+read back stored protocol metadata, lengths, and CRC after a write.
 
 ## Feature Flags
 
@@ -116,7 +117,8 @@ The default `nanoatmega328_usb` build now rejects the `protocol.info` command wi
 `ErrorCode::kUnavailable`.
 
 That change is intentional to save flash in the default Nano configuration.
-If `protocol.info` is needed, use `nanoatmega328_full`.
+If `protocol.info` is needed for EEPROM verification, use
+`nanoatmega328_usb_eepromtest`.
 
 The same `nanoatmega328_usb` profile also compiles out current-sense polling by
 setting `CE_CUBE_ENABLE_CURRENT=0`.
@@ -149,12 +151,6 @@ That change was chosen because:
 - RAM: `1742 / 2048`
 - status: does not fit
 
-#### `nanoatmega328_full`
-
-- flash: not remeasured in this workspace
-- RAM: not remeasured in this workspace
-- status: does not fit
-
 #### `nanoatmega328_usb`
 
 - flash: `30538 / 30720`
@@ -163,16 +159,23 @@ That change was chosen because:
 - note: this is the validated result on the older AVR toolchain path used by
   the IDE build button
 
+#### `nanoatmega328_usb_eepromtest`
+
+- flash: measured separately after the EEPROM round-trip additions
+- RAM: measured separately after the EEPROM round-trip additions
+- status: builds successfully and reserved for verification-only use
+
 ## Validation Performed
 
 - `pio run -e nanoatmega328_usb`
+- `pio run -e nanoatmega328_usb_eepromtest`
 - `pio run -e nanoatmega328`
 - `pio test -e native`
 
-Current note about `nanoatmega328_full`:
+Current note about `nanoatmega328_usb_eepromtest`:
 
-- it was not revalidated in this timing follow-up
-- it still needs a dedicated flash check before it is treated as shippable
+- it is intentionally a test-only profile, not the recommended production build
+- it exists so `protocol.info` can stay out of the default USB Nano image
 
 ## Notes About Warnings
 
@@ -193,7 +196,8 @@ The best next flash-focused follow-up is:
   still required on ATmega328P hardware
 - decide whether current-sense should stay disabled in `nanoatmega328_usb`, or
   whether a future pass should recover enough flash to restore it
-- reduce or gate `protocol.info` further so `nanoatmega328_full` fits again
+- decide whether a future production Nano profile should regain `protocol.info`,
+  or whether it should remain confined to `nanoatmega328_usb_eepromtest`
 - decide whether a future non-Nano target should re-enable verbose `v:1`
   compatibility, or whether the project can retire it entirely
 - keep compact `v:2` as the only outbound wire format

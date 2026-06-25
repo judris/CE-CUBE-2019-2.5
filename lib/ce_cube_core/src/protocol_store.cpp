@@ -270,32 +270,6 @@ ProtocolStoreStatus ProtocolStore::ReadWaitTimeMs(uint8_t index,
   return ProtocolStoreStatus::kOk;
 }
 
-ProtocolStoreStatus ProtocolStore::EnsureDefaultProtocol(
-    const ProtocolMetadata& metadata, uint16_t prepare_length,
-    const uint8_t* program, uint16_t program_length) {
-  if ((program == nullptr) || (program_length == 0U)) {
-    return ProtocolStoreStatus::kInvalidArg;
-  }
-
-  ProtocolInfo info = InvalidProtocolInfo();
-  if (LoadInfo(&info) == ProtocolStoreStatus::kOk) {
-    return ProtocolStoreStatus::kOk;
-  }
-
-  ProtocolStoreStatus status = BeginUpload(metadata);
-  if (status != ProtocolStoreStatus::kOk) {
-    return status;
-  }
-
-  status = WriteChunk(0U, program, static_cast<uint8_t>(program_length));
-  if (status != ProtocolStoreStatus::kOk) {
-    return status;
-  }
-
-  const uint16_t crc = ComputeCrc16Ccitt(program, program_length);
-  return Commit(prepare_length, program_length, crc);
-}
-
 bool ProtocolStore::IsOpcodeValid(uint8_t opcode) {
   return IsStructuralOpcodeValid(opcode);
 }

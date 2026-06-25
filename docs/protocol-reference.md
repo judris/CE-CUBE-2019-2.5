@@ -99,6 +99,9 @@ the canonical long names listed here.
 | `s1` | `sample_1_slot` | protocol metadata |
 | `sn` | `sample_count` | protocol metadata |
 | `rr` | `repetitions` | protocol metadata |
+| `cd` | `collection_duration_ms` | protocol metadata |
+| `jd` | `injection_duration_ms` | protocol metadata |
+| `dd` | `droplet_duration_ms` | protocol metadata |
 | `w0`..`w7` | `wait_0_ms`..`wait_7_ms` | milliseconds on wire |
 | `of` | `offset` | protocol chunk offset |
 | `dt` | `data` | `16` uppercase hex chars for `8` raw bytes |
@@ -164,7 +167,7 @@ Timing consequence:
 | `13` | `run.start` | none |
 | `14` | `run.stop` | none |
 | `15` | `run.status` | none |
-| `16` | `protocol.begin` | `sc,b1,b2,s1,sn,rr,w0..w7` |
+| `16` | `protocol.begin` | `sc,b1,b2,s1,sn,rr,im,cd,jd,dd,w0..w7` |
 | `17` | `protocol.chunk` | `of`, `dt` |
 | `18` | `protocol.commit` | `ln`, `cr` |
 | `19` | `protocol.info` | none |
@@ -236,7 +239,7 @@ Standard event example:
 `protocol_info` event shape:
 
 ```json
-{"v":2,"k":5,"s":N,"ev":4,"gt":...,"pv":...,"sc":...,"b1":...,"b2":...,"s1":...,"sn":...,"rr":...,"w0":...,"w1":...,"w2":...,"w3":...,"w4":...,"w5":...,"w6":...,"w7":...,"ln":...,"cr":...}
+{"v":2,"k":5,"s":N,"ev":4,"gt":...,"pv":...,"sc":...,"b1":...,"b2":...,"s1":...,"sn":...,"rr":...,"im":...,"cd":...,"jd":...,"dd":...,"w0":...,"w1":...,"w2":...,"w3":...,"w4":...,"w5":...,"w6":...,"w7":...,"pl":...,"ln":...,"cr":...}
 ```
 
 ## Telemetry
@@ -367,6 +370,9 @@ Stored header fields:
 
 Execution properties:
 
+- the firmware does not auto-seed EEPROM on boot
+- an empty or cleared EEPROM image leaves `protocol_valid=0` until the host
+  uploads or seeds a program
 - one opcode is read from EEPROM at a time
 - the full program is never loaded into RAM
 - sample progression is metadata-driven

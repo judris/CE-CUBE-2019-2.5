@@ -53,6 +53,23 @@ void test_idle_telemetry_has_no_analysis_time() {
   TEST_ASSERT_EQUAL_UINT32(0U, snapshot.analysis_time_ms);
 }
 
+void test_empty_storage_is_invalid_until_protocol_is_uploaded() {
+  ce_cube::ProtocolStore::ResetTestStorage();
+  ce_cube::InstrumentController controller;
+  controller.Initialize(0U);
+
+  const ce_cube::TelemetrySnapshot snapshot = controller.BuildTelemetry(7U, 0U);
+  TEST_ASSERT_FALSE(snapshot.protocol_valid);
+  TEST_ASSERT_EQUAL_UINT16(ce_cube::kFaultProtocolStore, snapshot.faults);
+
+  ce_cube::ParsedCommand start = MakeCommand(8U, ce_cube::CommandType::kRunStart);
+  const ce_cube::ReplyMessage reply = controller.HandleCommand(start, 0U);
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(ce_cube::MessageKind::kError),
+                        static_cast<int>(reply.kind));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(ce_cube::ErrorCode::kProtocolInvalid),
+                        static_cast<int>(reply.error_code));
+}
+
 void test_temporary_protocol_run_emits_events_and_completes() {
   ce_cube::ProtocolStore::ResetTestStorage();
   ce_cube::InstrumentController controller;
@@ -160,6 +177,7 @@ int main(int argc, char** argv) {
   RUN_TEST(test_status_get_requests_telemetry);
   RUN_TEST(test_protocol_info_is_unavailable_when_disabled);
   RUN_TEST(test_idle_telemetry_has_no_analysis_time);
+  RUN_TEST(test_empty_storage_is_invalid_until_protocol_is_uploaded);
   RUN_TEST(test_temporary_protocol_run_emits_events_and_completes);
   return UNITY_END();
 }

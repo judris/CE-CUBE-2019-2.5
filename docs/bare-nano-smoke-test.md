@@ -28,6 +28,7 @@ It does not validate real sensors or real actuator motion.
 - `telemetry` and `event` use the firmware's own outbound sequence numbers
 - idle telemetry omits `at`
 - events carry `gt` and run-related events carry `at` once analysis timing is valid
+- fresh or cleared EEPROM now boots with `pv:0` until a protocol is seeded or uploaded
 - `automation-smoke` overwrites the stored EEPROM protocol temporarily
 
 ## Compact Codes Used In Smoke Tests
@@ -64,7 +65,6 @@ Event codes used here:
 
 Expected steady-state telemetry after startup settling:
 
-- `pv: 1`
 - `hv: 0`
 - `pm: 0`
 - `v1: 0`
@@ -73,23 +73,35 @@ Expected steady-state telemetry after startup settling:
 - `cs: 0`
 - `ps: 1`
 - `ss: 2`
-- `ff: 38`
+- seeded EEPROM: `pv: 1`, `ff: 38`
+- empty or cleared EEPROM: `pv: 0`, `ff: 54`
 
-Reason for `ff: 38`:
+Reason for seeded `ff: 38`:
 
 - RF24 missing
 - AD7745 missing
 - pressure sensor missing
 
+Reason for unseeded `ff: 54`:
+
+- same three bare-board faults as above
+- plus `kFaultProtocolStore` because EEPROM has no valid image
+
 ### `nanoatmega328_usb`
 
 Expected steady-state telemetry is the same except:
 
-- `ff: 36`
+- seeded EEPROM: `pv: 1`, `ff: 36`
+- empty or cleared EEPROM: `pv: 0`, `ff: 52`
 
-Reason for `ff: 36`:
+Reason for seeded `ff: 36`:
 
 - RF24 is compiled out, so only sensor and pressure faults remain
+
+Reason for unseeded `ff: 52`:
+
+- same two bare-board faults as above
+- plus `kFaultProtocolStore` because EEPROM has no valid image
 
 ## Manual Serial Bring-Up
 
@@ -268,12 +280,13 @@ Expect:
 - `a:0` for `protocol.commit`
 - `a:0` for `run.start`
 - one event with `k:5`, `ev:1`, a nonzero `gt`, and `at:0` almost immediately
-- one event with `k:5`, `ev:2`, a later `gt`, and `at:1000` about `1` second later
+- one event with `k:5`, `ev:2`, a later `gt`, and `at` close to `1000` about `1`
+  second later
 
 After about `1.5` seconds, `status.get` should show:
 
 - `rs: 2`
-- `at: 1000`
+- `at` close to `1000`
 - unchanged bare-board faults
 
 After this smoke test, EEPROM no longer contains the previous stored protocol.
@@ -293,6 +306,7 @@ The script:
 - parses each returned JSON line
 - validates expected numeric reply kinds and codes
 - writes a plain-text transcript under `artifacts/serial-smoke`
+- accepts either seeded (`pv:1`) or unseeded (`pv:0`) idle startup telemetry
 
 ### List Ports
 
@@ -310,6 +324,37 @@ powershell -ExecutionPolicy Bypass -File .\tools\serial_smoke.ps1 -Mode current-
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\serial_smoke.ps1 -Mode usb-build-smoke -Port COM5
+```
+
+### Seed Minimal Protocol
+
+Use this when the board should keep a valid EEPROM image across reboots without
+relying on startup auto-seeding:
+
+```powershell
+pio run -e nanoatmega328_usb -t seed_minimal_protocol --upload-port COM5
+```
+
+Direct PowerShell form:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\serial_smoke.ps1 -Mode seed-minimal-protocol -Port COM5
+```
+
+### EEPROM Round-Trip Test
+
+Use the dedicated EEPROM-test firmware when you need to verify that the board
+can clear EEPROM, store a protocol, read it back through `protocol.info`, and
+execute it:
+
+```powershell
+pio run -e nanoatmega328_usb_eepromtest -t upload -t eeprom_roundtrip_test --upload-port COM5
+```
+
+Direct PowerShell form after flashing that test build:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\serial_smoke.ps1 -Mode eeprom-roundtrip -Port COM5
 ```
 
 ### Manual-Smoke Alias

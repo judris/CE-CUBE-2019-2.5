@@ -1,7 +1,7 @@
 # CE-CUBE Project Overview
 
 Documented by: Codex (OpenAI GPT-5 coding agent)
-Timestamp: 2026-06-25 16:02:54 +03:00
+Timestamp: 2026-06-25 22:30:26 +03:00
 
 ## What This Repository Is
 
@@ -30,11 +30,6 @@ The current PlatformIO environments are:
   - pressure enabled
   - `protocol.info` disabled to save flash
   - currently over the Nano flash limit under the present toolchain
-- `nanoatmega328_full`
-  - RF24 enabled
-  - pressure enabled
-  - `protocol.info` enabled
-  - currently over the Nano flash limit
 - `nanoatmega328_usb`
   - default target
   - RF24 disabled
@@ -43,6 +38,12 @@ The current PlatformIO environments are:
     PlatformIO AVR toolchain used by the IDE build button
   - intended for direct USB operation with lower flash/RAM use
   - current recommended Nano build
+- `nanoatmega328_usb_eepromtest`
+  - RF24 disabled
+  - pressure disabled
+  - current-sense polling disabled
+  - `protocol.info` enabled
+  - intended only for EEPROM write/readback hardware tests over USB
 - `native`
   - host-side unit tests
 
@@ -266,6 +267,9 @@ main model. Instead, it uses an EEPROM-backed run program.
 Important properties:
 
 - only one active protocol is stored in EEPROM
+- normal startup does not install a fallback protocol image
+- empty or cleared EEPROM reports `protocol_valid=0` and sets the
+  `kFaultProtocolStore` bit until a host uploads or seeds a valid program
 - the runner reads one opcode at a time
 - the whole protocol is not loaded into RAM
 - sample iteration is controlled by metadata:
@@ -274,6 +278,8 @@ Important properties:
   - `repetitions`
 - total run count is effectively `sample_count * repetitions`
 
+The minimal explicit seeding workflow is documented in `eeprom-seeding.md`.
+
 This design is specifically intended to be Nano-safe.
 
 ## Transport Model
@@ -281,10 +287,18 @@ This design is specifically intended to be Nano-safe.
 ### USB
 
 - newline-delimited JSON over `Serial`
+- this is a true command and telemetry transport in the refactored firmware,
+  not just a debug console
 - outgoing wire format is compact `v:2`
 - incoming commands accept compact `v:2` and legacy verbose `v:1`
 - bounded startup wait
 - does not require a permanently connected host to boot
+
+Legacy note:
+- the older CE-CUBE 2.5 code did call `Serial.begin(...)`, but its actual
+  command and telemetry path was RF24
+- `Serial` in that legacy code was used mainly for debug prints and RF24 trace
+  output, not as a first-class host control interface
 
 ### RF24
 

@@ -290,6 +290,58 @@ void test_protocol_store_commit_and_load() {
       ce_cube::ComputeCrc16Ccitt(program, sizeof(program)), info.program_crc16);
 }
 
+void test_protocol_store_readback_apis_return_written_values() {
+  ce_cube::ProtocolStore::ResetTestStorage();
+  ce_cube::ProtocolStore store;
+  store.Begin();
+
+  ce_cube::ProtocolMetadata metadata = {};
+  metadata.slot_count = ce_cube::kDefaultSlotCount;
+  metadata.bge1_slot = 0U;
+  metadata.bge2_slot = 1U;
+  metadata.sample_1_slot = 5U;
+  metadata.sample_count = 1U;
+  metadata.repetitions = 1U;
+  metadata.injection_mode = ce_cube::InjectionMode::kElectrokinetic;
+  metadata.collection_duration_ms = 1000UL;
+  metadata.injection_duration_ms = 1000UL;
+  metadata.droplet_duration_ms = 1000UL;
+  metadata.wait_times_100ms[0] = 10U;
+
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(ce_cube::ProtocolStoreStatus::kOk),
+                        static_cast<int>(store.BeginUpload(metadata)));
+
+  const uint8_t program[] = {
+      static_cast<uint8_t>(ce_cube::ProtocolOpcode::kEndSection),
+      static_cast<uint8_t>(ce_cube::ProtocolOpcode::kEventRunStart),
+      static_cast<uint8_t>(ce_cube::ProtocolOpcode::kWaitBase),
+      static_cast<uint8_t>(ce_cube::ProtocolOpcode::kEventRunStop),
+      static_cast<uint8_t>(ce_cube::ProtocolOpcode::kEndSection),
+  };
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(ce_cube::ProtocolStoreStatus::kOk),
+                        static_cast<int>(store.WriteChunk(
+                            0U, program, static_cast<uint8_t>(sizeof(program)))));
+  TEST_ASSERT_EQUAL_INT(
+      static_cast<int>(ce_cube::ProtocolStoreStatus::kOk),
+      static_cast<int>(store.Commit(
+          1U,
+          static_cast<uint16_t>(sizeof(program)),
+          ce_cube::ComputeCrc16Ccitt(program, sizeof(program)))));
+
+  uint32_t wait_ms = 0U;
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(ce_cube::ProtocolStoreStatus::kOk),
+                        static_cast<int>(store.ReadWaitTimeMs(0U, &wait_ms)));
+  TEST_ASSERT_EQUAL_UINT32(1000UL, wait_ms);
+
+  for (uint16_t index = 0U; index < static_cast<uint16_t>(sizeof(program));
+       ++index) {
+    uint8_t opcode = 0U;
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(ce_cube::ProtocolStoreStatus::kOk),
+                          static_cast<int>(store.ReadOpcode(index, &opcode)));
+    TEST_ASSERT_EQUAL_UINT8(program[index], opcode);
+  }
+}
+
 void test_compact_command_frame_budgets() {
   static const char kStatusJson[] = "{\"v\":2,\"k\":2,\"s\":1,\"c\":21}";
   static const char kProtocolBeginJson[] =
@@ -384,6 +436,7 @@ int main(int argc, char** argv) {
   RUN_TEST(test_encode_bare_telemetry_meets_compact_budget);
   RUN_TEST(test_encode_representative_telemetry_uses_compact_keys);
   RUN_TEST(test_protocol_store_commit_and_load);
+  RUN_TEST(test_protocol_store_readback_apis_return_written_values);
   RUN_TEST(test_compact_command_frame_budgets);
   RUN_TEST(test_rf24_framing_round_trip_v2);
   RUN_TEST(test_rf24_reassembler_accepts_legacy_frame_version);
