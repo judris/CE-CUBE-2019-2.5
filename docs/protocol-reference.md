@@ -33,8 +33,8 @@ Observed compact payload sizes used by host tests:
 | Message | Example bytes | RF24 frames |
 | --- | ---: | ---: |
 | `status.get` command | `26` | `2` |
-| bare telemetry | `157` | `7` |
-| timed run telemetry | `173` | `8` |
+| bare telemetry | `171` | `8` |
+| timed run telemetry | `193` | `9` |
 | standard run event | `65` | `3` |
 | `protocol.begin` command | `129` | `6` |
 
@@ -68,9 +68,9 @@ Fixed `v:2` message shapes:
 
 ```json
 {"v":2,"k":2,"s":N,"c":ID,...}
-{"v":2,"k":3,"s":N,"a":CODE}
-{"v":2,"k":4,"s":N,"e":CODE}
-{"v":2,"k":1,"s":N,...telemetry fields...}
+{"v":2,"k":3,"s":N,"a":CODE,"gt":...}
+{"v":2,"k":4,"s":N,"e":CODE,"gt":...}
+{"v":2,"k":1,"s":N,"gt":...,...telemetry fields...}
 {"v":2,"k":5,"s":N,"ev":CODE,...event fields...}
 ```
 
@@ -107,13 +107,14 @@ the canonical long names listed here.
 | `dt` | `data` | `16` uppercase hex chars for `8` raw bytes |
 | `ln` | `program_length` | bytes |
 | `cr` | `crc16` | CRC16-CCITT |
-| `gt` | `global_time_ms` | event uptime since firmware boot |
+| `gt` | `global_time_ms` | outbound uptime since firmware boot |
 | `at` | `analysis_time_ms` | telemetry/event time since `EVENT_RUN_START` |
 | `cp` | `cap_pf` | telemetry |
 | `tc` | `temp_c` | telemetry |
 | `ss` | `sensor_status` | numeric enum |
 | `pp` | `pressure_pa` | telemetry |
 | `ps` | `pressure_status` | numeric enum |
+| `cu` | `current_ua` | telemetry |
 | `hv` | `hv` | `0` or `1` |
 | `pm` | `pump` | `0` or `1` |
 | `v1` | `valve1` | `0` or `1` |
@@ -134,7 +135,7 @@ the canonical long names listed here.
   - never a clock or timestamp
 - `gt`
   - monotonic firmware uptime in milliseconds since boot
-  - emitted on outbound `event` messages
+  - emitted on outbound `telemetry`, `ack`, `error`, and `event` messages
 - `at`
   - analysis-relative milliseconds since the most recent `EVENT_RUN_START`
     opcode executed by the stored run protocol
@@ -247,8 +248,8 @@ Standard event example:
 Telemetry shape:
 
 ```json
-{"v":2,"k":1,"s":N,"cp":...,"tc":...,"ss":...,"pp":...,"ps":...,"hv":...,"pm":...,"v1":...,"v2":...,"pv":...,"lf":...,"cs":...,"rs":...,"pc":...,"si":...,"sl":...,"ri":...,"ff":...}
-{"v":2,"k":1,"s":N,"cp":...,"tc":...,"ss":...,"pp":...,"ps":...,"hv":...,"pm":...,"v1":...,"v2":...,"pv":...,"lf":...,"cs":...,"rs":...,"pc":...,"si":...,"sl":...,"ri":...,"at":...,"ff":...}
+{"v":2,"k":1,"s":N,"gt":...,"cp":...,"tc":...,"ss":...,"pp":...,"ps":...,"cu":...,"hv":...,"pm":...,"v1":...,"v2":...,"pv":...,"lf":...,"cs":...,"rs":...,"pc":...,"si":...,"sl":...,"ri":...,"ff":...}
+{"v":2,"k":1,"s":N,"gt":...,"at":...,"cp":...,"tc":...,"ss":...,"pp":...,"ps":...,"cu":...,"hv":...,"pm":...,"v1":...,"v2":...,"pv":...,"lf":...,"cs":...,"rs":...,"pc":...,"si":...,"sl":...,"ri":...,"ff":...}
 ```
 
 Telemetry status enums:
@@ -294,13 +295,13 @@ Run state:
 Bare-board telemetry example:
 
 ```json
-{"v":2,"k":1,"s":1,"cp":0.000000,"tc":0.000,"ss":2,"pp":0,"ps":1,"hv":0,"pm":0,"v1":0,"v2":0,"pv":1,"lf":0,"cs":0,"rs":0,"pc":0,"si":0,"sl":0,"ri":0,"ff":36}
+{"v":2,"k":1,"s":1,"gt":0,"cp":0.000000,"tc":0.000,"ss":2,"pp":0,"ps":1,"cu":0,"hv":0,"pm":0,"v1":0,"v2":0,"pv":1,"lf":0,"cs":0,"rs":0,"pc":0,"si":0,"sl":0,"ri":0,"ff":36}
 ```
 
 Timed run telemetry example:
 
 ```json
-{"v":2,"k":1,"s":42,"cp":1.234567,"tc":20.125,"ss":0,"pp":101325,"ps":0,"hv":1,"pm":0,"v1":1,"v2":0,"pv":1,"lf":2,"cs":5,"rs":1,"pc":9,"si":1,"sl":5,"ri":2,"at":3456,"ff":3}
+{"v":2,"k":1,"s":42,"gt":7890,"at":3456,"cp":1.234567,"tc":20.125,"ss":0,"pp":101325,"ps":0,"cu":3210,"hv":1,"pm":0,"v1":1,"v2":0,"pv":1,"lf":2,"cs":5,"rs":1,"pc":9,"si":1,"sl":5,"ri":2,"ff":3}
 ```
 
 ## Parser Rules

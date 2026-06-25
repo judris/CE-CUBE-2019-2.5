@@ -281,6 +281,26 @@ function Assert-IntWithin {
     }
 }
 
+function Assert-TimestampedMessage {
+    param(
+        [object]$MessageJson,
+        [string]$Label,
+        [bool]$RequireAnalysisTime = $false
+    )
+
+    Assert-True -Condition (Has-JsonField $MessageJson 'gt') `
+        -Label "$Label should include gt"
+    Assert-True -Condition ([int](Get-JsonFieldValue $MessageJson 'gt') -ge 0) `
+        -Label "$Label gt should be non-negative"
+
+    if (Has-JsonField $MessageJson 'at') {
+        Assert-True -Condition ([int](Get-JsonFieldValue $MessageJson 'at') -ge 0) `
+            -Label "$Label at should be non-negative"
+    } elseif ($RequireAnalysisTime) {
+        Fail-Test "$Label should include at"
+    }
+}
+
 function Compute-Crc16Ccitt {
     param([byte[]]$Data)
 
@@ -493,6 +513,7 @@ function Invoke-CommandExpectAck {
         -SkippableKinds @($script:MessageKind.Telemetry, $script:MessageKind.Event)
     Assert-Equal -Actual (Get-JsonFieldValue $message.Json 'a') `
         -Expected $script:AckCode.Accepted -Label "Ack code for $Label"
+    Assert-TimestampedMessage -MessageJson $message.Json -Label "Ack for $Label"
     return $message.Json
 }
 
@@ -516,6 +537,7 @@ function Invoke-CommandExpectError {
         -SkippableKinds @($script:MessageKind.Telemetry, $script:MessageKind.Event)
     Assert-Equal -Actual (Get-JsonFieldValue $message.Json 'e') `
         -Expected $ExpectedCode -Label "Error code for $Label"
+    Assert-TimestampedMessage -MessageJson $message.Json -Label "Error for $Label"
 }
 
 function Invoke-StatusRequest {
@@ -535,12 +557,14 @@ function Invoke-StatusRequest {
         -SkippableKinds @($script:MessageKind.Telemetry, $script:MessageKind.Event)
     Assert-Equal -Actual (Get-JsonFieldValue $ack.Json 'a') `
         -Expected $script:AckCode.Status -Label 'Ack code for status.get'
+    Assert-TimestampedMessage -MessageJson $ack.Json -Label 'Ack for status.get'
 
     $telemetry = Receive-ExpectedMessage -SerialPort $SerialPort `
         -TimeoutMs $FollowupTimeoutMs -ExpectedKind $script:MessageKind.Telemetry `
         -SkippableKinds @($script:MessageKind.Event)
     Assert-Equal -Actual (Get-JsonFieldValue $telemetry.Json 'v') `
         -Expected $script:ProtocolVersion -Label 'Telemetry protocol version'
+    Assert-TimestampedMessage -MessageJson $telemetry.Json -Label 'Telemetry'
     return $telemetry.Json
 }
 
@@ -575,8 +599,8 @@ function Assert-BaselineTelemetry {
     }
     Assert-Equal -Actual (Get-JsonFieldValue $Telemetry 'ff') -Expected $expectedFaults `
         -Label 'ff'
-    Assert-True -Condition (-not (Has-JsonField $Telemetry 'gt')) `
-        -Label 'Idle telemetry should omit gt'
+    Assert-True -Condition (Has-JsonField $Telemetry 'gt') `
+        -Label 'Idle telemetry should include gt'
     Assert-True -Condition (-not (Has-JsonField $Telemetry 'at')) `
         -Label 'Idle telemetry should omit at'
 }
@@ -676,6 +700,7 @@ function Invoke-ProtocolInfoRequest {
         -SkippableKinds @($script:MessageKind.Telemetry, $script:MessageKind.Event)
     Assert-Equal -Actual (Get-JsonFieldValue $ack.Json 'a') `
         -Expected $script:AckCode.Status -Label 'Ack code for protocol.info'
+    Assert-TimestampedMessage -MessageJson $ack.Json -Label 'Ack for protocol.info'
 
     $event = Receive-ExpectedMessage -SerialPort $SerialPort `
         -TimeoutMs $FollowupTimeoutMs -ExpectedKind $script:MessageKind.Event `

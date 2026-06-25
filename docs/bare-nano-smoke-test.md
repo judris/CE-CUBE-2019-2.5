@@ -26,6 +26,7 @@ It does not validate real sensors or real actuator motion.
   sending the first command
 - `ack` and `error` echo the command sequence in `s`
 - `telemetry` and `event` use the firmware's own outbound sequence numbers
+- all outbound `ack`, `error`, `telemetry`, and `event` messages carry `gt`
 - idle telemetry omits `at`
 - events carry `gt` and run-related events carry `at` once analysis timing is valid
 - fresh or cleared EEPROM now boots with `pv:0` until a protocol is seeded or uploaded
@@ -118,8 +119,8 @@ Send:
 
 Expect:
 
-- one `ack` line with `a:1`
-- one `telemetry` line with `k:1`
+- one `ack` line with `a:1` and `gt`
+- one `telemetry` line with `k:1` and `gt`
 - no `at` field on the idle bare board
 
 ### 2. Parser Checks

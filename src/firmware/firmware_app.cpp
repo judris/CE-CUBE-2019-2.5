@@ -108,7 +108,7 @@ __attribute__((noinline)) void FirmwareApp::PollUsb(uint32_t now_ms) {
       controller_.MarkFault(kFaultProtocolParse);
       SendReply(MessageSource::kUsb,
                 {MessageKind::kError, 0U, AckCode::kAccepted,
-                 ErrorCode::kTransportOverflow});
+                 ErrorCode::kTransportOverflow, now_ms});
       continue;
     }
     HandleIncomingJson(usb_rx_buffer_, MessageSource::kUsb, now_ms);
@@ -141,7 +141,7 @@ __attribute__((noinline)) void FirmwareApp::HandleIncomingJson(
   if (!result.ok) {
     controller_.MarkFault(kFaultProtocolParse);
     SendReply(source, {MessageKind::kError, result.seq, AckCode::kAccepted,
-                       result.error});
+                       result.error, now_ms});
     return;
   }
 

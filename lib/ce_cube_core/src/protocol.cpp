@@ -239,6 +239,14 @@ bool AppendAnalysisTimeField(uint32_t analysis_time_ms, bool valid, char* buffer
          AppendUInt(analysis_time_ms, buffer, buffer_size, index);
 }
 
+bool AppendTimingFields(uint32_t uptime_ms, uint32_t analysis_time_ms,
+                        bool analysis_time_valid, char* buffer,
+                        size_t buffer_size, size_t* index) {
+  return AppendUptimeField(uptime_ms, buffer, buffer_size, index) &&
+         AppendAnalysisTimeField(analysis_time_ms, analysis_time_valid, buffer,
+                                 buffer_size, index);
+}
+
 bool AppendFixed(float value, uint8_t decimals, char* buffer, size_t buffer_size,
                  size_t* index) {
   int32_t scale = 1;
@@ -1493,6 +1501,9 @@ bool EncodeTelemetryJson(const TelemetrySnapshot& snapshot, char* buffer,
   const bool ok =
       EncodeMessageBase(MessageKind::kTelemetry, snapshot.seq, buffer,
                         buffer_size, &index) &&
+      AppendTimingFields(snapshot.uptime_ms, snapshot.analysis_time_ms,
+                         snapshot.analysis_time_valid, buffer, buffer_size,
+                         &index) &&
       AppendFlashLiteral(CE_FLASH_LITERAL(",\"cp\":"), buffer, buffer_size,
                          &index) &&
       AppendFixed(snapshot.cap_pf, 6U, buffer, buffer_size, &index) &&
@@ -1554,9 +1565,6 @@ bool EncodeTelemetryJson(const TelemetrySnapshot& snapshot, char* buffer,
       AppendFlashLiteral(CE_FLASH_LITERAL(",\"ri\":"), buffer, buffer_size,
                          &index) &&
       AppendUInt(snapshot.repetition, buffer, buffer_size, &index) &&
-      AppendAnalysisTimeField(snapshot.analysis_time_ms,
-                              snapshot.analysis_time_valid, buffer,
-                              buffer_size, &index) &&
       AppendFlashLiteral(CE_FLASH_LITERAL(",\"ff\":"), buffer, buffer_size,
                          &index) &&
       AppendUInt(snapshot.faults, buffer, buffer_size, &index) &&
@@ -1587,6 +1595,7 @@ bool EncodeAckJson(const ReplyMessage& reply, char* buffer, size_t buffer_size,
                          &index) &&
       AppendUInt(static_cast<uint8_t>(reply.ack_code), buffer, buffer_size,
                  &index) &&
+      AppendUptimeField(reply.uptime_ms, buffer, buffer_size, &index) &&
       AppendChar('}', buffer, buffer_size, &index);
 
   if (!ok) {
@@ -1614,6 +1623,7 @@ bool EncodeErrorJson(const ReplyMessage& reply, char* buffer, size_t buffer_size
                          &index) &&
       AppendUInt(static_cast<uint8_t>(reply.error_code), buffer, buffer_size,
                  &index) &&
+      AppendUptimeField(reply.uptime_ms, buffer, buffer_size, &index) &&
       AppendChar('}', buffer, buffer_size, &index);
 
   if (!ok) {
@@ -1640,10 +1650,9 @@ bool EncodeEventJson(const EventSnapshot& event, uint16_t seq, char* buffer,
                                buffer_size, &index) &&
             AppendUInt(static_cast<uint8_t>(event.code), buffer, buffer_size,
                        &index) &&
-            AppendUptimeField(event.uptime_ms, buffer, buffer_size, &index) &&
-            AppendAnalysisTimeField(event.analysis_time_ms,
-                                    event.analysis_time_valid, buffer,
-                                    buffer_size, &index);
+            AppendTimingFields(event.uptime_ms, event.analysis_time_ms,
+                               event.analysis_time_valid, buffer, buffer_size,
+                               &index);
   if (!ok) {
     return false;
   }

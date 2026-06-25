@@ -21,7 +21,7 @@ class InstrumentController {
   bool TakePendingEvent(EventSnapshot* event);
   void MarkFault(uint16_t fault_bit);
   void ClearFault(uint16_t fault_bit);
-  TelemetrySnapshot BuildTelemetry(uint16_t seq, uint32_t now_ms) const;
+ TelemetrySnapshot BuildTelemetry(uint16_t seq, uint32_t now_ms) const;
   const SensorDesiredConfig& desired_sensor_config() const;
   uint16_t faults() const;
   bool run_active() const;
@@ -41,8 +41,8 @@ class InstrumentController {
   BinaryOutputController* valve2_mutable();
 
  private:
-  static ReplyMessage MakeAck(uint16_t seq, AckCode code);
-  static ReplyMessage MakeError(uint16_t seq, ErrorCode code);
+  ReplyMessage MakeAck(uint16_t seq, AckCode code, uint32_t now_ms) const;
+  ReplyMessage MakeError(uint16_t seq, ErrorCode code, uint32_t now_ms) const;
   static ProtocolInfo InvalidProtocolInfo();
   static ProtocolMetadata DefaultProtocolMetadata();
   static bool QueueProtocolInfoEvent(const ProtocolInfo& protocol_info,

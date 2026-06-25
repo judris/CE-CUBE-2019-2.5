@@ -290,6 +290,9 @@ This design is specifically intended to be Nano-safe.
 - this is a true command and telemetry transport in the refactored firmware,
   not just a debug console
 - outgoing wire format is compact `v:2`
+- all outbound `ack`, `error`, `telemetry`, and `event` messages carry a
+  monotonic `gt` uptime timestamp; `telemetry` and `event` also carry `at`
+  once CE analysis timing is valid
 - incoming commands accept compact `v:2` and legacy verbose `v:1`
 - bounded startup wait
 - does not require a permanently connected host to boot

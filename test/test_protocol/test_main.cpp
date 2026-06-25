@@ -113,18 +113,20 @@ void test_encode_ack_and_error_use_compact_v2_schema() {
   size_t length = 0U;
   ce_cube::ReplyMessage ack = {ce_cube::MessageKind::kAck, 7U,
                                ce_cube::AckCode::kStatus,
-                               ce_cube::ErrorCode::kNone};
+                               ce_cube::ErrorCode::kNone,
+                               321U};
   ce_cube::ReplyMessage error = {ce_cube::MessageKind::kError, 9U,
                                  ce_cube::AckCode::kAccepted,
-                                 ce_cube::ErrorCode::kBusy};
+                                 ce_cube::ErrorCode::kBusy,
+                                 654U};
 
   TEST_ASSERT_TRUE(ce_cube::EncodeAckJson(ack, json, sizeof(json), &length));
-  TEST_ASSERT_EQUAL_STRING("{\"v\":2,\"k\":3,\"s\":7,\"a\":1}", json);
+  TEST_ASSERT_EQUAL_STRING("{\"v\":2,\"k\":3,\"s\":7,\"a\":1,\"gt\":321}", json);
   TEST_ASSERT_EQUAL_UINT(strlen(json), length);
 
   TEST_ASSERT_TRUE(
       ce_cube::EncodeErrorJson(error, json, sizeof(json), &length));
-  TEST_ASSERT_EQUAL_STRING("{\"v\":2,\"k\":4,\"s\":9,\"e\":4}", json);
+  TEST_ASSERT_EQUAL_STRING("{\"v\":2,\"k\":4,\"s\":9,\"e\":4,\"gt\":654}", json);
   TEST_ASSERT_EQUAL_UINT(strlen(json), length);
 }
 
@@ -157,6 +159,7 @@ void test_encode_bare_telemetry_meets_compact_budget() {
   size_t length = 0U;
   const ce_cube::TelemetrySnapshot snapshot = {
       1U,
+      0U,
       0.0F,
       0.0F,
       ce_cube::SensorStatusCode::kBusError,
@@ -182,10 +185,11 @@ void test_encode_bare_telemetry_meets_compact_budget() {
 
   TEST_ASSERT_TRUE(
       ce_cube::EncodeTelemetryJson(snapshot, json, sizeof(json), &length));
-  TEST_ASSERT_TRUE(length <= 216U);
+  TEST_ASSERT_TRUE(length <= 232U);
+  TEST_ASSERT_NOT_NULL(strstr(json, "\"gt\":0"));
   TEST_ASSERT_NULL(strstr(json, "\"at\""));
   TEST_ASSERT_EQUAL_STRING(
-      "{\"v\":2,\"k\":1,\"s\":1,\"cp\":0.000000,\"tc\":0.000,\"ss\":2,"
+      "{\"v\":2,\"k\":1,\"s\":1,\"gt\":0,\"cp\":0.000000,\"tc\":0.000,\"ss\":2,"
       "\"pp\":0,\"ps\":1,\"cu\":0,\"hv\":0,\"pm\":0,\"v1\":0,\"v2\":0,\"pv\":1,"
       "\"lf\":0,\"cs\":0,\"rs\":0,\"pc\":0,\"si\":0,\"sl\":0,\"ri\":0,"
       "\"ff\":36}",
@@ -200,6 +204,7 @@ void test_encode_representative_telemetry_uses_compact_keys() {
   size_t length = 0U;
   const ce_cube::TelemetrySnapshot snapshot = {
       42U,
+      7890U,
       1.234567F,
       20.125F,
       ce_cube::SensorStatusCode::kOk,
@@ -231,13 +236,14 @@ void test_encode_representative_telemetry_uses_compact_keys() {
   TEST_ASSERT_NOT_NULL(strstr(json, "\"pp\":101325"));
   TEST_ASSERT_NOT_NULL(strstr(json, "\"cu\":3210"));
   TEST_ASSERT_NOT_NULL(strstr(json, "\"pc\":9"));
+  TEST_ASSERT_NOT_NULL(strstr(json, "\"gt\":7890"));
   TEST_ASSERT_NOT_NULL(strstr(json, "\"at\":3456"));
   TEST_ASSERT_NULL(strstr(json, "\"kind\""));
   TEST_ASSERT_NULL(strstr(json, "\"protocol_valid\""));
-  TEST_ASSERT_TRUE(length <= 240U);
+  TEST_ASSERT_TRUE(length <= 256U);
   TEST_ASSERT_TRUE(
       CountRf24Frames(ce_cube::MessageKind::kTelemetry, snapshot.seq, json) <=
-      11U);
+      12U);
   TEST_ASSERT_EQUAL_UINT(strlen(json), length);
 }
 

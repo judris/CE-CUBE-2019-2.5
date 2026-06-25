@@ -71,12 +71,14 @@ void InstrumentController::Initialize(uint32_t now_ms) {
   sensor_config_dirty_ = true;
 }
 
-ReplyMessage InstrumentController::MakeAck(uint16_t seq, AckCode code) {
-  return {MessageKind::kAck, seq, code, ErrorCode::kNone};
+ReplyMessage InstrumentController::MakeAck(uint16_t seq, AckCode code,
+                                           uint32_t now_ms) const {
+  return {MessageKind::kAck, seq, code, ErrorCode::kNone, now_ms};
 }
 
-ReplyMessage InstrumentController::MakeError(uint16_t seq, ErrorCode code) {
-  return {MessageKind::kError, seq, AckCode::kAccepted, code};
+ReplyMessage InstrumentController::MakeError(uint16_t seq, ErrorCode code,
+                                             uint32_t now_ms) const {
+  return {MessageKind::kError, seq, AckCode::kAccepted, code, now_ms};
 }
 
 ProtocolInfo InstrumentController::InvalidProtocolInfo() {
@@ -262,14 +264,14 @@ void InstrumentController::ApplyRunRequests(const RunStepRequest& requests,
 __attribute__((noinline)) ReplyMessage InstrumentController::HandleCommand(
     const ParsedCommand& command, uint32_t now_ms) {
   if (!ManualCommandsAllowed(command.type)) {
-    return MakeError(command.seq, ErrorCode::kBusy);
+    return MakeError(command.seq, ErrorCode::kBusy, now_ms);
   }
 
   switch (command.type) {
     case CommandType::kSensorSetRate:
       sensor_config_.update_rate = command.update_rate;
       sensor_config_dirty_ = true;
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kSensorSetExcitation:
       if (command.has_excitation_frequency) {
         sensor_config_.excitation_frequency = command.excitation_frequency;
@@ -278,78 +280,78 @@ __attribute__((noinline)) ReplyMessage InstrumentController::HandleCommand(
         sensor_config_.excitation_level = command.excitation_level;
       }
       sensor_config_dirty_ = true;
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kSensorTempComp:
       sensor_config_.temperature_compensation = command.enable;
       sensor_config_dirty_ = true;
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kSensorAutoZero:
       if (command.clear_zero) {
         zero_offset_pf_ = 0.0F;
-        return MakeAck(command.seq, AckCode::kAccepted);
+        return MakeAck(command.seq, AckCode::kAccepted, now_ms);
       }
       if (!latest_measurement_.valid ||
           (latest_measurement_.status != SensorStatusCode::kOk)) {
-        return MakeError(command.seq, ErrorCode::kNotReady);
+        return MakeError(command.seq, ErrorCode::kNotReady, now_ms);
       }
       zero_offset_pf_ = latest_measurement_.raw_cap_pf;
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kLiftMove:
       if (!lift_.CommandMove(command.lift_position, now_ms)) {
-        return MakeError(command.seq, ErrorCode::kBusy);
+        return MakeError(command.seq, ErrorCode::kBusy, now_ms);
       }
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kCarouselStep:
       if (!carousel_.CommandRelativeSlots(command.carousel_steps, now_ms)) {
-        return MakeError(command.seq, ErrorCode::kBusy);
+        return MakeError(command.seq, ErrorCode::kBusy, now_ms);
       }
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kCarouselGotoSlot:
       if (!carousel_.CommandGotoSlot(command.slot, now_ms)) {
-        return MakeError(command.seq, ErrorCode::kBusy);
+        return MakeError(command.seq, ErrorCode::kBusy, now_ms);
       }
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kCarouselAdjust:
       if (!carousel_.CommandAdjust(command.adjust_direction, now_ms)) {
-        return MakeError(command.seq, ErrorCode::kBusy);
+        return MakeError(command.seq, ErrorCode::kBusy, now_ms);
       }
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kCarouselHome:
       if (!StartFluidAction(FluidActionType::kCarouselHome, manual_fluid_settings_,
                             protocol_info_.metadata.bge1_slot, now_ms)) {
-        return MakeError(command.seq, ErrorCode::kBusy);
+        return MakeError(command.seq, ErrorCode::kBusy, now_ms);
       }
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kHvSet:
       hv_.SetEnabled(command.enable);
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kPumpSet:
       pump_.SetEnabled(command.enable);
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kValveSet:
       if (command.valve_id == 1U) {
         valve1_.SetEnabled(command.enable);
-        return MakeAck(command.seq, AckCode::kAccepted);
+        return MakeAck(command.seq, AckCode::kAccepted, now_ms);
       }
       if (command.valve_id == 2U) {
         valve2_.SetEnabled(command.enable);
-        return MakeAck(command.seq, AckCode::kAccepted);
+        return MakeAck(command.seq, AckCode::kAccepted, now_ms);
       }
-      return MakeError(command.seq, ErrorCode::kInvalidField);
+      return MakeError(command.seq, ErrorCode::kInvalidField, now_ms);
     case CommandType::kCollectionConfigure:
       manual_fluid_settings_.collection_duration_ms =
           command.collection_duration_ms;
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kInjectionConfigure:
       manual_fluid_settings_.injection_mode = command.injection_mode;
       manual_fluid_settings_.injection_duration_ms = command.duration_ms;
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kSampleCollect:
       if (!StartFluidAction(FluidActionType::kCollectSample, manual_fluid_settings_,
                             protocol_info_.metadata.bge1_slot, now_ms)) {
-        return MakeError(command.seq, ErrorCode::kNotReady);
+        return MakeError(command.seq, ErrorCode::kNotReady, now_ms);
       }
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kSampleStop: {
       const FluidExecutionContext fluid_context = {
           &latest_pressure_, &lift_, &carousel_, &replenish_,
@@ -360,46 +362,46 @@ __attribute__((noinline)) ReplyMessage InstrumentController::HandleCommand(
       }
       fluid_.Stop(fluid_context, now_ms);
       DisableAllOutputs();
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     }
     case CommandType::kInjectionRun:
       if (!StartFluidAction(FluidActionType::kInjectSample, manual_fluid_settings_,
                             protocol_info_.metadata.bge1_slot, now_ms)) {
-        return MakeError(command.seq, ErrorCode::kNotReady);
+        return MakeError(command.seq, ErrorCode::kNotReady, now_ms);
       }
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kDropletMake:
       if (!StartFluidAction(FluidActionType::kMakeBgeDroplet,
                             manual_fluid_settings_,
                             protocol_info_.metadata.bge1_slot, now_ms)) {
-        return MakeError(command.seq, ErrorCode::kNotReady);
+        return MakeError(command.seq, ErrorCode::kNotReady, now_ms);
       }
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kReplenishRun:
       if (!StartFluidAction(FluidActionType::kReplenish, manual_fluid_settings_,
                             protocol_info_.metadata.bge1_slot, now_ms)) {
-        return MakeError(command.seq, ErrorCode::kNotReady);
+        return MakeError(command.seq, ErrorCode::kNotReady, now_ms);
       }
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kDrainRun:
       if (!StartFluidAction(FluidActionType::kDrain, manual_fluid_settings_,
                             protocol_info_.metadata.bge1_slot, now_ms)) {
-        return MakeError(command.seq, ErrorCode::kBusy);
+        return MakeError(command.seq, ErrorCode::kBusy, now_ms);
       }
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kRunStart:
       if (lift_.busy() || carousel_.busy() || replenish_.busy() || fluid_.active()) {
-        return MakeError(command.seq, ErrorCode::kBusy);
+        return MakeError(command.seq, ErrorCode::kBusy, now_ms);
       }
       if (!protocol_info_.valid) {
-        return MakeError(command.seq, ErrorCode::kProtocolInvalid);
+        return MakeError(command.seq, ErrorCode::kProtocolInvalid, now_ms);
       }
       if (!run_.Start(protocol_info_)) {
-        return MakeError(command.seq, ErrorCode::kBusy);
+        return MakeError(command.seq, ErrorCode::kBusy, now_ms);
       }
       ResetAnalysisClock();
       ClearFault(kFaultRun);
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     case CommandType::kRunStop: {
       const FluidExecutionContext fluid_context = {
           &latest_pressure_, &lift_, &carousel_, &replenish_,
@@ -409,31 +411,33 @@ __attribute__((noinline)) ReplyMessage InstrumentController::HandleCommand(
       StopAnalysisClock(now_ms);
       DisableAllOutputs();
       QueueRunEvent(EventCode::kRunStop, now_ms);
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     }
     case CommandType::kRunStatus:
     case CommandType::kStatusGet:
       status_request_pending_ = true;
-      return MakeAck(command.seq, AckCode::kStatus);
+      return MakeAck(command.seq, AckCode::kStatus, now_ms);
     case CommandType::kProtocolBegin: {
       const ProtocolStoreStatus status =
           protocol_store_.BeginUpload(command.protocol_metadata);
       if (status != ProtocolStoreStatus::kOk) {
         MarkFault(kFaultProtocolStore);
-        return MakeError(command.seq, ProtocolStoreStatusToErrorCode(status));
+        return MakeError(command.seq, ProtocolStoreStatusToErrorCode(status),
+                         now_ms);
       }
       protocol_info_ = InvalidProtocolInfo();
       protocol_info_.metadata = command.protocol_metadata;
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     }
     case CommandType::kProtocolChunk: {
       const ProtocolStoreStatus status = protocol_store_.WriteChunk(
           command.offset, command.chunk_data, command.chunk_length);
       if (status != ProtocolStoreStatus::kOk) {
         MarkFault(kFaultProtocolStore);
-        return MakeError(command.seq, ProtocolStoreStatusToErrorCode(status));
+        return MakeError(command.seq, ProtocolStoreStatusToErrorCode(status),
+                         now_ms);
       }
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     }
     case CommandType::kProtocolCommit: {
       const ProtocolStoreStatus commit_status = protocol_store_.Commit(
@@ -441,10 +445,10 @@ __attribute__((noinline)) ReplyMessage InstrumentController::HandleCommand(
       if (commit_status != ProtocolStoreStatus::kOk) {
         MarkFault(kFaultProtocolStore);
         return MakeError(command.seq,
-                         ProtocolStoreStatusToErrorCode(commit_status));
+                         ProtocolStoreStatusToErrorCode(commit_status), now_ms);
       }
       LoadProtocolInfoFromStore();
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     }
     case CommandType::kProtocolInfo:
 #if CE_CUBE_ENABLE_PROTOCOL_INFO
@@ -452,24 +456,24 @@ __attribute__((noinline)) ReplyMessage InstrumentController::HandleCommand(
           QueueProtocolInfoEvent(protocol_info_, now_ms, &pending_event_)) {
         event_pending_ = true;
       }
-      return MakeAck(command.seq, AckCode::kStatus);
+      return MakeAck(command.seq, AckCode::kStatus, now_ms);
 #else
-      return MakeError(command.seq, ErrorCode::kUnavailable);
+      return MakeError(command.seq, ErrorCode::kUnavailable, now_ms);
 #endif
     case CommandType::kProtocolClear: {
       const ProtocolStoreStatus clear_status = protocol_store_.Clear();
       if (clear_status != ProtocolStoreStatus::kOk) {
         MarkFault(kFaultProtocolStore);
         return MakeError(command.seq,
-                         ProtocolStoreStatusToErrorCode(clear_status));
+                         ProtocolStoreStatusToErrorCode(clear_status), now_ms);
       }
       protocol_info_ = InvalidProtocolInfo();
       MarkFault(kFaultProtocolStore);
-      return MakeAck(command.seq, AckCode::kAccepted);
+      return MakeAck(command.seq, AckCode::kAccepted, now_ms);
     }
     case CommandType::kInvalid:
     default:
-      return MakeError(command.seq, ErrorCode::kInvalidCommand);
+      return MakeError(command.seq, ErrorCode::kInvalidCommand, now_ms);
   }
 }
 
@@ -603,6 +607,7 @@ TelemetrySnapshot InstrumentController::BuildTelemetry(uint16_t seq,
       latest_measurement_.raw_cap_pf - zero_offset_pf_;
   const RunProgress progress = run_.progress();
   return {seq,
+          now_ms,
           corrected_cap,
           latest_measurement_.temp_c,
           latest_measurement_.status,

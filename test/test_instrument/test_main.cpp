@@ -25,6 +25,7 @@ void test_status_get_requests_telemetry() {
                         static_cast<int>(reply.kind));
   TEST_ASSERT_EQUAL_INT(static_cast<int>(ce_cube::AckCode::kStatus),
                         static_cast<int>(reply.ack_code));
+  TEST_ASSERT_EQUAL_UINT32(0U, reply.uptime_ms);
   TEST_ASSERT_TRUE(controller.TakeStatusRequest());
   TEST_ASSERT_FALSE(controller.TakeStatusRequest());
 }
@@ -41,6 +42,7 @@ void test_protocol_info_is_unavailable_when_disabled() {
                         static_cast<int>(reply.kind));
   TEST_ASSERT_EQUAL_INT(static_cast<int>(ce_cube::ErrorCode::kUnavailable),
                         static_cast<int>(reply.error_code));
+  TEST_ASSERT_EQUAL_UINT32(0U, reply.uptime_ms);
 }
 
 void test_idle_telemetry_has_no_analysis_time() {
@@ -48,7 +50,9 @@ void test_idle_telemetry_has_no_analysis_time() {
   ce_cube::InstrumentController controller;
   controller.Initialize(0U);
 
-  const ce_cube::TelemetrySnapshot snapshot = controller.BuildTelemetry(1U, 0U);
+  const ce_cube::TelemetrySnapshot snapshot =
+      controller.BuildTelemetry(1U, 123U);
+  TEST_ASSERT_EQUAL_UINT32(123U, snapshot.uptime_ms);
   TEST_ASSERT_FALSE(snapshot.analysis_time_valid);
   TEST_ASSERT_EQUAL_UINT32(0U, snapshot.analysis_time_ms);
 }
@@ -68,6 +72,7 @@ void test_empty_storage_is_invalid_until_protocol_is_uploaded() {
                         static_cast<int>(reply.kind));
   TEST_ASSERT_EQUAL_INT(static_cast<int>(ce_cube::ErrorCode::kProtocolInvalid),
                         static_cast<int>(reply.error_code));
+  TEST_ASSERT_EQUAL_UINT32(0U, reply.uptime_ms);
 }
 
 void test_temporary_protocol_run_emits_events_and_completes() {
@@ -140,6 +145,12 @@ void test_temporary_protocol_run_emits_events_and_completes() {
   TEST_ASSERT_TRUE(event.analysis_time_valid);
   TEST_ASSERT_EQUAL_UINT32(0U, event.analysis_time_ms);
 
+  const ce_cube::ParsedCommand status = MakeCommand(14U, ce_cube::CommandType::kStatusGet);
+  const ce_cube::ReplyMessage status_reply = controller.HandleCommand(status, 500U);
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(ce_cube::MessageKind::kAck),
+                        static_cast<int>(status_reply.kind));
+  TEST_ASSERT_EQUAL_UINT32(500U, status_reply.uptime_ms);
+
   controller.Tick(0U);
   TEST_ASSERT_FALSE(controller.TakePendingEvent(&event));
 
@@ -159,6 +170,7 @@ void test_temporary_protocol_run_emits_events_and_completes() {
       controller.BuildTelemetry(1U, 1000U);
   TEST_ASSERT_EQUAL_INT(static_cast<int>(ce_cube::RunStateCode::kComplete),
                         static_cast<int>(snapshot.run_state));
+  TEST_ASSERT_EQUAL_UINT32(1000U, snapshot.uptime_ms);
   TEST_ASSERT_TRUE(snapshot.analysis_time_valid);
   TEST_ASSERT_EQUAL_UINT32(1000U, snapshot.analysis_time_ms);
   TEST_ASSERT_EQUAL_UINT16(0U, snapshot.faults);

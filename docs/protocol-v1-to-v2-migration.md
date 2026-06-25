@@ -131,7 +131,7 @@ These fields did not exist in the verbose `v:1` schema.
 
 | Canonical Name | v2 Field | Notes |
 | --- | --- | --- |
-| `global_time_ms` | `gt` | outbound `event` uptime in milliseconds since firmware boot |
+| `global_time_ms` | `gt` | outbound `telemetry`, `ack`, `error`, or `event` uptime in milliseconds since firmware boot |
 | `analysis_time_ms` | `at` | outbound `telemetry` or `event` milliseconds since the most recent `EVENT_RUN_START`; omitted until valid |
 
 ## Reply Code Mapping

@@ -8,7 +8,7 @@ namespace ce_cube {
 static constexpr uint8_t kLegacyProtocolVersion = 1U;
 static constexpr uint8_t kProtocolVersion = 2U;
 static constexpr size_t kMaxCommandJsonLength = 240U;
-static constexpr size_t kMaxTelemetryJsonLength = 240U;
+static constexpr size_t kMaxTelemetryJsonLength = 272U;
 static constexpr size_t kMaxEventJsonLength = 240U;
 static constexpr size_t kMaxRf24FrameSize = 32U;
 static constexpr size_t kRf24HeaderSize = 9U;
@@ -234,6 +234,7 @@ struct RunProgress {
 
 struct TelemetrySnapshot {
   uint16_t seq;
+  uint32_t uptime_ms;
   float cap_pf;
   float temp_c;
   SensorStatusCode sensor_status;
@@ -300,6 +301,7 @@ struct ReplyMessage {
   uint16_t seq;
   AckCode ack_code;
   ErrorCode error_code;
+  uint32_t uptime_ms;
 };
 
 struct ParseResult {
