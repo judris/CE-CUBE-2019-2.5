@@ -29,6 +29,8 @@ It does not validate real sensors or real actuator motion.
 - all outbound `ack`, `error`, `telemetry`, and `event` messages carry `gt`
 - idle telemetry omits `at`
 - events carry `gt` and run-related events carry `at` once analysis timing is valid
+- if the board is otherwise quiet, it now emits heartbeat telemetry roughly
+  every `10` seconds; any other telemetry send restarts that interval
 - fresh or cleared EEPROM now boots with `pv:0` until a protocol is seeded or uploaded
 - `automation-smoke` overwrites the stored EEPROM protocol temporarily
 

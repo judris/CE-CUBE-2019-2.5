@@ -21,6 +21,7 @@ class FirmwareApp {
   void Loop();
 
  private:
+  static constexpr uint32_t kHeartbeatIntervalMs = 10000UL;
   static constexpr size_t kTxJsonBufferLength =
       (kMaxCommandJsonLength > kMaxTelemetryJsonLength)
           ? ((kMaxCommandJsonLength > kMaxEventJsonLength)
@@ -65,6 +66,7 @@ class FirmwareApp {
 #endif
   char tx_buffer_[kTxJsonBufferLength + 1U];
   uint16_t outbound_seq_;
+  uint32_t last_telemetry_publish_ms_;
 };
 
 }  // namespace ce_cube

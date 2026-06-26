@@ -252,6 +252,16 @@ Telemetry shape:
 {"v":2,"k":1,"s":N,"gt":...,"at":...,"cp":...,"tc":...,"ss":...,"pp":...,"ps":...,"cu":...,"hv":...,"pm":...,"v1":...,"v2":...,"pv":...,"lf":...,"cs":...,"rs":...,"pc":...,"si":...,"sl":...,"ri":...,"ff":...}
 ```
 
+Telemetry delivery notes:
+
+- `status.get` still triggers an immediate telemetry reply
+- if no telemetry has been sent for about `10` seconds, the firmware emits an
+  unsolicited heartbeat telemetry frame using the same schema
+- pressure-sample workflows can still trigger immediate telemetry when the
+  controller explicitly requests a forced pressure sample
+- any telemetry emission, including `status.get` replies and forced pressure
+  samples, resets the heartbeat timer
+
 Telemetry status enums:
 
 Sensor status:
