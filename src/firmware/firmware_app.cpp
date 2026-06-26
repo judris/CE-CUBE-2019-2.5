@@ -5,28 +5,6 @@
 
 namespace ce_cube {
 namespace {
-
-bool ShouldPublishSensorTelemetry(const SensorMeasurement& measurement,
-                                  const InstrumentController& controller) {
-  return measurement.valid &&
-         (measurement.status == SensorStatusCode::kOk) &&
-         !controller.lift().busy() &&
-         !controller.carousel().busy();
-}
-
-bool ShouldPublishPressureTelemetry(const PressureMeasurement& measurement,
-                                    bool force_sample,
-                                    const InstrumentController& controller) {
-  if (force_sample) {
-    return true;
-  }
-
-  return measurement.valid &&
-         (measurement.status == PressureStatusCode::kOk) &&
-         !controller.lift().busy() &&
-         !controller.carousel().busy();
-}
-
 }  // namespace
 
 FirmwareApp::FirmwareApp()
@@ -50,7 +28,8 @@ FirmwareApp::FirmwareApp()
       rf_rx_buffer_(),
 #endif
       tx_buffer_(),
-      outbound_seq_(1U) {
+      outbound_seq_(1U),
+      last_telemetry_publish_ms_(0U) {
   usb_rx_buffer_[0] = '\0';
 #if CE_CUBE_ENABLE_RF24
   rf_rx_buffer_[0] = '\0';
@@ -59,7 +38,8 @@ FirmwareApp::FirmwareApp()
 }
 
 void FirmwareApp::Setup() {
-  controller_.Initialize(millis());
+  const uint32_t now_ms = millis();
+  controller_.Initialize(now_ms);
   actuators_.Begin();
   usb_.Begin(kSerialBaudRate, kUsbStartupTimeoutMs);
 #if CE_CUBE_ENABLE_RF24
@@ -78,6 +58,7 @@ void FirmwareApp::Setup() {
     controller_.MarkFault(kFaultPressure);
   }
 #endif
+  last_telemetry_publish_ms_ = now_ms;
   ApplyPendingSensorConfig();
 }
 
@@ -92,7 +73,9 @@ __attribute__((noinline)) void FirmwareApp::Loop() {
   PollCurrent(now_ms);
   PollPressure(now_ms);
   DrainPendingEvents();
-  if (controller_.TakeStatusRequest()) {
+  const bool heartbeat_due =
+      (now_ms - last_telemetry_publish_ms_) >= kHeartbeatIntervalMs;
+  if (controller_.TakeStatusRequest() || heartbeat_due) {
     BroadcastTelemetry(now_ms);
   }
 }
@@ -198,9 +181,7 @@ void FirmwareApp::PollSensor(uint32_t now_ms) {
   }
 
   controller_.OnMeasurement(measurement);
-  if (ShouldPublishSensorTelemetry(measurement, controller_)) {
-    BroadcastTelemetry(now_ms);
-  }
+  (void)now_ms;
 }
 
 void FirmwareApp::PollCurrent(uint32_t now_ms) {
@@ -225,7 +206,7 @@ void FirmwareApp::PollPressure(uint32_t now_ms) {
   }
 
   controller_.OnPressureMeasurement(measurement);
-  if (ShouldPublishPressureTelemetry(measurement, force_sample, controller_)) {
+  if (force_sample) {
     BroadcastTelemetry(now_ms);
   }
 #else
@@ -255,10 +236,20 @@ __attribute__((noinline)) void FirmwareApp::BroadcastTelemetry(
     return;
   }
 
-  (void)SendJson(MessageSource::kUsb, MessageKind::kTelemetry, seq, tx_buffer_);
+  const bool usb_ok =
+      SendJson(MessageSource::kUsb, MessageKind::kTelemetry, seq, tx_buffer_);
 #if CE_CUBE_ENABLE_RF24
-  if (!SendJson(MessageSource::kRf24, MessageKind::kTelemetry, seq, tx_buffer_)) {
+  const bool rf_ok =
+      SendJson(MessageSource::kRf24, MessageKind::kTelemetry, seq, tx_buffer_);
+  if (!rf_ok) {
     controller_.MarkFault(kFaultRf24);
+  }
+  if (usb_ok || rf_ok) {
+    last_telemetry_publish_ms_ = now_ms;
+  }
+#else
+  if (usb_ok) {
+    last_telemetry_publish_ms_ = now_ms;
   }
 #endif
 }

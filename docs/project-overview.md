@@ -293,6 +293,9 @@ This design is specifically intended to be Nano-safe.
 - all outbound `ack`, `error`, `telemetry`, and `event` messages carry a
   monotonic `gt` uptime timestamp; `telemetry` and `event` also carry `at`
   once CE analysis timing is valid
+- when no other telemetry has been emitted for about `10` seconds, the
+  firmware sends an unsolicited telemetry heartbeat; any telemetry send resets
+  that timer
 - incoming commands accept compact `v:2` and legacy verbose `v:1`
 - bounded startup wait
 - does not require a permanently connected host to boot
